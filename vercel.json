@@ -1,19 +1,49 @@
 {
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/token",
-      "destination": "/api/token"
+      "src": "api/token.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "styles.css",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "app.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "excalidraw-board.js",
+      "use": "@vercel/static"
     }
   ],
-  "headers": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Permissions-Policy",
-          "value": "microphone=(self)"
-        }
-      ]
+      "src": "/token",
+      "dest": "/api/token.js"
+    },
+    {
+      "src": "/api/token",
+      "dest": "/api/token.js"
+    },
+    {
+      "src": "/",
+      "dest": "/index.html",
+      "headers": {
+        "Permissions-Policy": "microphone=(self)"
+      }
+    },
+    {
+      "src": "/(.+)",
+      "dest": "/$1",
+      "headers": {
+        "Permissions-Policy": "microphone=(self)"
+      }
     }
   ]
 }
