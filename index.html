@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Whiteboard Interview Simulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&family=Roboto:wght@400;500;700&family=Roboto+Flex:opsz,wght@8..144,500..700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@excalidraw/excalidraw@0.18.0/dist/prod/index.css?v=2" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div class="challenge-heading">
+          <p class="eyebrow">Design challenge</p>
+          <h1 id="promptTitle">Design a system for appealing a policy violation.</h1>
+          <p class="app-name">Whiteboard Interview Simulator</p>
+        </div>
+        <div class="session-controls">
+          <button id="shuffleChallenge" class="secondary-button" type="button" aria-label="Shuffle design challenge" title="Shuffle challenge">
+            <span class="material-symbols-rounded" aria-hidden="true">shuffle</span>
+            <span>Shuffle</span>
+          </button>
+          <select id="difficultySelect" aria-label="Challenge difficulty">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard" selected>Hard</option>
+          </select>
+          <select id="modeSelect" aria-label="Session length">
+            <option value="full">45 min</option>
+            <option value="express">20 min</option>
+          </select>
+          <button id="startSession" type="button">Start</button>
+          <button id="endSession" type="button">End</button>
+        </div>
+      </header>
+
+      <section class="statusbar" aria-label="Session status">
+        <div class="phase-summary">
+          <div class="phase-chip">
+            <span class="material-symbols-rounded" aria-hidden="true">radio_button_unchecked</span>
+            <strong id="phaseName">Not started</strong>
+          </div>
+          <span id="phaseHint">Start when you are ready.</span>
+          <span id="micHelp" class="mic-help"></span>
+        </div>
+        <div class="session-metrics">
+          <div class="time-chip" aria-label="Elapsed time">
+            <span class="material-symbols-rounded" aria-hidden="true">timer</span>
+            <span id="sessionClock">0:00</span>
+          </div>
+          <button id="voiceToggle" class="mic-toggle" type="button" aria-label="Pause or resume listening">
+            <span class="material-symbols-rounded" aria-hidden="true">mic</span>
+            <span id="voiceStatus">Mic idle</span>
+          </button>
+          <span id="interviewerState" class="interviewer-chip">Silent</span>
+        </div>
+      </section>
+
+      <section class="listening-panel" aria-label="Listening status">
+        <div class="listening-indicator" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div>
+          <strong id="listeningTitle">Not listening yet</strong>
+          <p id="heardPreview">Start the session to open the microphone. Your spoken questions and narration will appear here.</p>
+        </div>
+      </section>
+
+      <section id="scorecard" class="scorecard outcome-report" hidden aria-label="Whiteboarding report">
+        <div class="speaker-row">
+          <div>
+            <p class="eyebrow">Outcome</p>
+            <h2>Whiteboarding report</h2>
+          </div>
+          <strong id="overallScore"></strong>
+        </div>
+        <div id="scoreRows"></div>
+        <div id="nextNotes"></div>
+      </section>
+
+      <section class="workspace">
+        <section class="board-panel" aria-label="Shared whiteboard">
+          <div id="excalidrawMount" class="excalidraw-mount" aria-label="Excalidraw whiteboard"></div>
+          <div id="boardLoading" class="board-loading" role="status">
+            <span class="material-symbols-rounded" aria-hidden="true">draw</span>
+            <span>Loading Excalidraw board...</span>
+          </div>
+          <textarea id="boardTextEditor" class="board-text-editor" aria-label="Canvas text" hidden></textarea>
+          <canvas id="board" width="1600" height="1000" role="img" aria-label="Fallback drawing canvas. Use the candidate narration field to describe sketches for the interview record." hidden></canvas>
+        </section>
+
+        <aside class="interview-panel" aria-label="Interview">
+          <section class="interviewer-card">
+            <div class="speaker-row">
+              <span>Interview transcript</span>
+              <span id="budgetLabel">0 interruptions</span>
+            </div>
+            <div id="interviewerLog" class="interviewer-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
+          </section>
+
+          <details id="transcriptDrawer" class="transcript-drawer">
+            <summary>Full transcript and fallback</summary>
+            <div id="liveTranscript" class="live-transcript" aria-live="polite" aria-label="Live candidate transcript"></div>
+            <p id="canvasFallback" class="assistive-text">Describe what you sketch out loud. This transcript is the non-visual record of the board.</p>
+            <label for="candidateInput">Text fallback</label>
+            <textarea id="candidateInput" aria-describedby="canvasFallback" placeholder="Use this only if voice is unavailable."></textarea>
+            <button id="sendTurn" type="button">Send to interviewer</button>
+          </details>
+        </aside>
+      </section>
+      <div id="screenReaderStatus" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+    </main>
+
+    <script src="./app.js"></script>
+    <script type="module" src="./excalidraw-board.js?v=2"></script>
+  </body>
+</html>
