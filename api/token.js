@@ -1,19 +1,23 @@
+export const config = {
+  runtime: "nodejs"
+};
+
 const model = process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2";
 const voice = process.env.OPENAI_REALTIME_VOICE || "marin";
 
 export default async function handler(request, response) {
-  if (request.method !== "POST") {
-    response.status(405).json({ error: "Use POST for /token." });
-    return;
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    response.status(503).json({ error: "OPENAI_API_KEY is missing on the server." });
-    return;
-  }
-
   try {
-    const body = typeof request.body === "string" ? JSON.parse(request.body || "{}") : request.body || {};
+    if (request.method !== "POST") {
+      sendJson(response, 405, { error: "Use POST for /token." });
+      return;
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      sendJson(response, 503, { error: "OPENAI_API_KEY is missing on the server." });
+      return;
+    }
+
+    const body = await readRequestBody(request);
     const apiResponse = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
       headers: {
@@ -24,7 +28,7 @@ export default async function handler(request, response) {
         session: {
           type: "realtime",
           model,
-          instructions: body.instructions,
+          instructions: body.instructions || "You are a concise whiteboard interview simulator.",
           audio: {
             input: {
               transcription: { model: "gpt-4o-mini-transcribe" },
@@ -45,13 +49,31 @@ export default async function handler(request, response) {
 
     const text = await apiResponse.text();
     if (!apiResponse.ok) {
-      response.status(apiResponse.status).json({ error: text });
+      sendJson(response, apiResponse.status, { error: text });
       return;
     }
 
-    response.setHeader("Content-Type", "application/json; charset=utf-8");
-    response.status(200).send(text);
+    sendRawJson(response, 200, text);
   } catch (error) {
-    response.status(500).json({ error: error.message || "Realtime token request failed." });
+    console.error("Realtime token function failed:", error);
+    sendJson(response, 500, { error: error?.message || "Realtime token request failed." });
   }
+}
+
+async function readRequestBody(request) {
+  if (!request.body) return {};
+  if (typeof request.body === "object" && !Buffer.isBuffer(request.body)) return request.body;
+  const text = Buffer.isBuffer(request.body) ? request.body.toString("utf8") : String(request.body);
+  if (!text.trim()) return {};
+  return JSON.parse(text);
+}
+
+function sendJson(response, status, payload) {
+  sendRawJson(response, status, JSON.stringify(payload));
+}
+
+function sendRawJson(response, status, body) {
+  response.statusCode = status;
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.end(body);
 }
