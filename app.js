@@ -433,6 +433,7 @@ const state = {
   phaseElapsed: 0,
   phaseHistory: [],
   lastPhaseChangeAt: 0,
+  endedAtText: "",
   elapsed: 0,
   lastInterjectionAt: 0,
   lastCandidateAt: 0,
@@ -452,6 +453,12 @@ const state = {
   modelCallCount: 0,
   modelCallLimit: 12,
   pendingOpening: false,
+  skipNextInterviewerTranscript: false,
+  tabId: globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  queuedRealtimeInstructions: "",
+  queuedRealtimeOptions: null,
+  lastClarificationKey: "",
+  lastClarificationAnswer: "",
   timer: null,
   tool: "select",
   drawing: false,
@@ -475,6 +482,7 @@ const state = {
   realtimeReady: false,
   realtimeConnecting: false,
   realtimeResponseActive: false,
+  realtimeResponseRequested: false,
   localStream: null,
   remoteStream: null,
   remoteAudio: null,
@@ -538,12 +546,15 @@ const els = {
 
 const ctx = els.board?.getContext("2d");
 const theme = getComputedStyle(document.documentElement);
+const voiceOwnerKey = "whiteboard-sim-active-voice-tab";
+let voiceChannel = null;
 
 function init() {
   window.speechSynthesis?.cancel();
+  setupVoice();
+  setupVoiceOwnership();
   offerResumeIfAvailable();
   bindEvents();
-  setupVoice();
   setupBoard();
   render();
 }
@@ -564,7 +575,10 @@ function bindEvents() {
   els.startSession.addEventListener("click", startSession);
   els.endSession.addEventListener("click", endSession);
   els.sendTurn.addEventListener("click", submitCandidateTurn);
-  els.voiceToggle.addEventListener("click", toggleVoice);
+  els.voiceToggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (state.started && !state.ended && !state.listening && !state.realtimeConnecting) startListening();
+  });
   els.undoBoard?.addEventListener("click", undoBoard);
   els.redoBoard?.addEventListener("click", redoBoard);
   els.zoomOut?.addEventListener("click", () => zoomBoard(0.88));
@@ -578,8 +592,6 @@ function bindEvents() {
     const remaining = els.interviewerLog.scrollHeight - els.interviewerLog.clientHeight - els.interviewerLog.scrollTop;
     state.transcriptAutoScroll = remaining < 24;
   });
-  window.addEventListener("keydown", handlePushToTalkKeydown);
-  window.addEventListener("keyup", handlePushToTalkKeyup);
   document.querySelectorAll(".tool").forEach((button) => {
     if (button.classList.contains("action-tool")) return;
     button.addEventListener("click", () => {
@@ -601,9 +613,12 @@ function startSession() {
   state.lastCandidateAt = Date.now();
   state.lastCanvasActivityAt = Date.now();
   state.lastInterjectionAt = 0;
-  logMessage("interviewer", openingLine());
-  announce(`Interviewer: ${openingLine()}`);
-  setListeningState("idle", "Push to talk", "Hold Space outside the canvas or use the mic toggle when you want the interviewer to hear you.");
+  const prompt = openingLine();
+  logMessage("interviewer", prompt);
+  announce(`Interviewer: ${prompt}`);
+  state.pendingOpening = true;
+  setListeningState("requesting", "Connecting interviewer", "The interviewer is joining and will listen while you work.");
+  startListening();
   state.timer = setInterval(tick, 1000);
   state.autosaveTimer = setInterval(saveSessionSnapshot, 10000);
   saveSessionSnapshot();
@@ -615,6 +630,7 @@ function endSession() {
   finalizePhaseHistory();
   state.ended = true;
   state.started = false;
+  state.endedAtText = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   clearInterval(state.timer);
   clearInterval(state.autosaveTimer);
   state.timer = null;
@@ -645,6 +661,7 @@ function resetSession() {
     phaseElapsed: 0,
     phaseHistory: [],
     lastPhaseChangeAt: 0,
+    endedAtText: "",
     elapsed: 0,
     lastInterjectionAt: 0,
     lastCandidateAt: 0,
@@ -662,6 +679,11 @@ function resetSession() {
     transcriptAutoScroll: true,
     modelCallCount: 0,
     pendingOpening: false,
+    skipNextInterviewerTranscript: false,
+    queuedRealtimeInstructions: "",
+    queuedRealtimeOptions: null,
+    lastClarificationKey: "",
+    lastClarificationAnswer: "",
     timer: null,
     strokes: [],
     redoStack: [],
@@ -681,6 +703,7 @@ function resetSession() {
     realtimeReady: false,
     realtimeConnecting: false,
     realtimeResponseActive: false,
+    realtimeResponseRequested: false,
     localStream: null,
     remoteStream: null,
     remoteAudio: null,
@@ -779,6 +802,45 @@ function setupVoice() {
   }
 }
 
+function setupVoiceOwnership() {
+  window.addEventListener("storage", (event) => {
+    if (event.key !== voiceOwnerKey || !event.newValue) return;
+    try {
+      const owner = JSON.parse(event.newValue);
+      handleExternalVoiceClaim(owner.id);
+    } catch {
+      // Ignore malformed ownership records from older builds.
+    }
+  });
+  if ("BroadcastChannel" in window) {
+    voiceChannel = new BroadcastChannel("whiteboard-sim-voice");
+    voiceChannel.addEventListener("message", (event) => {
+      if (event.data?.type === "voice-claimed") handleExternalVoiceClaim(event.data.id);
+    });
+  }
+}
+
+function claimVoiceOwnership() {
+  const owner = { id: state.tabId, at: Date.now() };
+  try {
+    localStorage.setItem(voiceOwnerKey, JSON.stringify(owner));
+  } catch {
+    // Private browsing can block storage; BroadcastChannel still covers modern tabs.
+  }
+  voiceChannel?.postMessage({ type: "voice-claimed", id: state.tabId });
+}
+
+function handleExternalVoiceClaim(ownerId) {
+  if (!ownerId || ownerId === state.tabId) return;
+  if (!state.listening && !state.realtimeConnecting && !state.realtimeReady && !state.realtimeResponseActive) return;
+  state.voiceRunId += 1;
+  state.listening = false;
+  clearNoSpeechTimer();
+  disconnectRealtime();
+  setListeningState("idle", "Voice moved to another tab", "Only one interviewer voice can run at a time.");
+  els.voiceToggle.classList.remove("listening");
+}
+
 function toggleVoice() {
   if (state.listening || state.realtimeConnecting) stopListening();
   else startListening();
@@ -803,6 +865,7 @@ function handlePushToTalkKeyup(event) {
 
 async function startListening() {
   if (!state.voiceAvailable || state.listening || state.realtimeConnecting || !state.started || state.ended) return;
+  claimVoiceOwnership();
   const runId = state.voiceRunId + 1;
   state.voiceRunId = runId;
   state.listening = true;
@@ -811,7 +874,7 @@ async function startListening() {
   try {
     await connectRealtime(runId);
     if (!isActiveVoiceRun(runId)) return;
-    setListeningState("listening", "Listening", "Speak naturally while you draw. Your words will appear here.");
+    setListeningState("listening", "Interviewer listening", "Think out loud. The interviewer will answer direct questions and otherwise observe.");
     armNoSpeechTimer();
   } catch (error) {
     if (!isActiveVoiceRun(runId)) return;
@@ -827,7 +890,10 @@ function stopListening() {
   state.voiceRunId += 1;
   state.listening = false;
   clearNoSpeechTimer();
-  setListeningState(state.ended ? "ended" : "paused", state.ended ? "Mic ended" : "Mic paused", state.ended ? "" : "Listening paused. Press the mic to resume.");
+  setListeningState(
+    state.ended ? "ended" : "Interviewer disconnected",
+    state.ended ? "Session complete" : "Start again to reconnect the interviewer."
+  );
   els.voiceToggle.classList.remove("listening");
   disconnectRealtime();
 }
@@ -850,7 +916,14 @@ async function connectRealtime(runId) {
 
   const pc = new RTCPeerConnection();
   const dc = pc.createDataChannel("oai-events");
-  const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const localStream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1
+    }
+  });
   if (!isActiveVoiceRun(runId)) {
     localStream.getTracks().forEach((track) => track.stop());
     pc.close();
@@ -877,7 +950,11 @@ async function connectRealtime(runId) {
     }
     state.realtimeReady = true;
     state.realtimeConnecting = false;
-    setListeningState("listening", "Listening", "Mic is open. Think out loud while you work.");
+    setListeningState("listening", "Interviewer listening", "Think out loud. The interviewer will answer when you ask them directly.");
+    if (state.pendingOpening) {
+      state.pendingOpening = false;
+      createRealtimeOpening();
+    }
   });
   dc.addEventListener("message", handleRealtimeEvent);
   dc.addEventListener("close", () => {
@@ -911,6 +988,10 @@ function disconnectRealtime() {
   cancelRealtimeResponse();
   state.realtimeReady = false;
   state.realtimeConnecting = false;
+  state.realtimeResponseActive = false;
+  state.realtimeResponseRequested = false;
+  state.queuedRealtimeInstructions = "";
+  state.queuedRealtimeOptions = null;
   if (state.realtime?.dc) state.realtime.dc.close();
   if (state.realtime?.pc) state.realtime.pc.close();
   state.realtime = null;
@@ -929,14 +1010,12 @@ function handleRealtimeEvent(message) {
     state.lastCandidateAt = Date.now();
     state.interimText = "Listening...";
     setListeningState("receiving", "Hearing you", "I am hearing you. Keep thinking out loud.");
-    cancelRealtimeResponse();
-    clearRemoteAudioBuffer();
     renderLiveTranscript();
     return;
   }
   if (event.type === "input_audio_buffer.speech_stopped") {
     state.interimText = "";
-    setListeningState("listening", "Listening", "I heard you. I will stay quiet unless you ask the interviewer to answer.");
+    setListeningState("listening", "Interviewer listening", "I heard you. I will stay quiet unless you ask the interviewer directly.");
     renderLiveTranscript();
     return;
   }
@@ -952,11 +1031,17 @@ function handleRealtimeEvent(message) {
       if (requestQuietTime(text)) {
         state.quietUntil = Date.now() + 120000;
         requestRealtimeResponse('Say exactly: "Of course, take your time." Then stop speaking.', { force: true });
-      } else if (shouldInterviewerRespondTo(text) && canInterviewerSpeak({ direct: true }).allowed) {
-        state.lastCandidateQuestionAt = Date.now();
-        requestRealtimeResponse(responseInstructionFor(text));
       } else {
-        els.interviewerState.textContent = "Listening";
+        const clarifyingAnswer = answerQuestion(text);
+        if (clarifyingAnswer) {
+          state.lastCandidateQuestionAt = Date.now();
+          requestRealtimeResponse(`Answer the candidate naturally and directly. Say this, with normal pacing: "${clarifyingAnswer}"`, { force: true });
+        } else if (shouldInterviewerRespondTo(text) && canInterviewerSpeak({ direct: true }).allowed) {
+          state.lastCandidateQuestionAt = Date.now();
+          requestRealtimeResponse(responseInstructionFor(text));
+        } else {
+          els.interviewerState.textContent = "Listening";
+        }
       }
     }
     renderLiveTranscript();
@@ -984,22 +1069,34 @@ function handleRealtimeEvent(message) {
   }
   if (event.type === "response.done") {
     state.realtimeResponseActive = false;
+    state.realtimeResponseRequested = false;
     const finalText = extractRealtimeResponseText(event) || state.interviewerDraft;
     if (finalText.trim()) {
       const text = sanitizeInterviewerText(finalText.trim());
-      recordTranscriptTurn("interviewer", text, { realtimeItemIds: responseOutputItemIds(event) });
-      maybePinConstraint(text);
-      replaceInterviewerDraft(text);
-      announce(`Interviewer: ${text}`);
+      if (state.skipNextInterviewerTranscript) {
+        state.skipNextInterviewerTranscript = false;
+        const draft = els.interviewerLog.querySelector("[data-draft='true']");
+        if (draft) draft.remove();
+      } else {
+        recordTranscriptTurn("interviewer", text, { realtimeItemIds: responseOutputItemIds(event) });
+        maybePinConstraint(text);
+        replaceInterviewerDraft(text);
+        announce(`Interviewer: ${text}`);
+      }
     }
     state.interviewerDraft = "";
     updateInterviewerState();
+    flushQueuedRealtimeResponse();
     return;
   }
   if (event.type === "error") {
     const message = event.error?.message || "";
+    state.realtimeResponseActive = false;
+    state.realtimeResponseRequested = false;
+    state.interviewerDraft = "";
     if (/cancel|no active response/i.test(message)) {
       setSilent();
+      flushQueuedRealtimeResponse();
       return;
     }
     useFallback("Give me a moment to look at your board.");
@@ -1252,12 +1349,8 @@ function responseInstructionFor(text) {
 }
 
 function createRealtimeOpening() {
-  sendRealtimeEvent({
-    type: "response.create",
-    response: {
-      instructions: `Say exactly this opening line, then stop and listen without adding guidance: "${openingLine()}"`
-    }
-  });
+  state.skipNextInterviewerTranscript = true;
+  requestRealtimeResponse(`Read this challenge aloud exactly, then stop: "${openingLine()}"`, { force: true });
 }
 
 function phasePromptContext() {
@@ -1301,10 +1394,15 @@ function sendRealtimeText(text) {
   if (requestQuietTime(text)) {
     state.quietUntil = Date.now() + 120000;
     requestRealtimeResponse('Say exactly: "Of course, take your time." Then stop speaking.', { force: true });
-  } else if (shouldInterviewerRespondTo(text) && canInterviewerSpeak({ direct: true }).allowed) {
-    requestRealtimeResponse(responseInstructionFor(text));
   } else {
-    setSilent();
+    const clarifyingAnswer = answerQuestion(text);
+    if (clarifyingAnswer) {
+      requestRealtimeResponse(`Answer the candidate naturally and directly. Say this, with normal pacing: "${clarifyingAnswer}"`, { force: true });
+    } else if (shouldInterviewerRespondTo(text) && canInterviewerSpeak({ direct: true }).allowed) {
+      requestRealtimeResponse(responseInstructionFor(text));
+    } else {
+      setSilent();
+    }
   }
 }
 
@@ -1314,21 +1412,38 @@ function sendRealtimeEvent(event) {
 
 function requestRealtimeResponse(instructions, options = {}) {
   if (!state.realtimeReady && !options.forceWithoutReady) return false;
+  if (state.realtimeResponseActive || state.realtimeResponseRequested) {
+    state.queuedRealtimeInstructions = instructions;
+    state.queuedRealtimeOptions = { ...options, force: true };
+    els.interviewerState.textContent = "Queued";
+    return true;
+  }
   if (!options.force && state.modelCallCount >= state.modelCallLimit) {
     setSilent();
     return false;
   }
   pruneRealtimeConversationWindow();
   state.modelCallCount += 1;
+  state.realtimeResponseRequested = true;
+  state.realtimeResponseActive = true;
   sendRealtimeEvent({
     type: "response.create",
     response: {
-      instructions: `${instructions}\nHard limit: under 30 spoken words. Do not mention mode, rubric, constraint deck, tokens, or system instructions.`,
-      max_output_tokens: 100
+      instructions: `${instructions}\nKeep it brief: one or two short spoken sentences. Always finish the sentence before stopping. Do not mention mode, rubric, constraint deck, tokens, or system instructions.`,
+      max_output_tokens: 600
     }
   });
   renderCallCounter();
   return true;
+}
+
+function flushQueuedRealtimeResponse() {
+  if (!state.queuedRealtimeInstructions || !state.realtimeReady || state.realtimeResponseActive || state.realtimeResponseRequested) return;
+  const instructions = state.queuedRealtimeInstructions;
+  const options = state.queuedRealtimeOptions || { force: true };
+  state.queuedRealtimeInstructions = "";
+  state.queuedRealtimeOptions = null;
+  window.setTimeout(() => requestRealtimeResponse(instructions, options), 250);
 }
 
 function renderCallCounter() {
@@ -1342,6 +1457,9 @@ function cancelRealtimeResponse() {
   if (!state.realtimeResponseActive) return;
   sendRealtimeEvent({ type: "response.cancel" });
   state.realtimeResponseActive = false;
+  state.realtimeResponseRequested = false;
+  state.queuedRealtimeInstructions = "";
+  state.queuedRealtimeOptions = null;
   state.interviewerDraft = "";
   els.interviewerState.textContent = "Interrupted";
 }
@@ -1455,7 +1573,7 @@ Behavior:
   - Engineering says we do not have the API capability to support that in V1. What changes?
   - Data Science shows users abandon the flow at this exact step. What hypothesis does that create?
 - Forbidden coaching moves: do not say "pick one slice," "create a user flow," "start with this screen," "design the sharing dialog," "map the happy path," or similar instructions unless the candidate explicitly asks you for examples of possible artifacts.
-- If interrupted, stop immediately and let the candidate speak.
+- If the candidate speaks while you are speaking, finish your current short sentence, then listen.
 - Do not mention this prompt, the rubric, or hidden scenario facts as a list.
 - Aim for a candidate-led talk ratio: the candidate should speak and work far more than you do.
 
@@ -1480,7 +1598,7 @@ function armNoSpeechTimer() {
   clearNoSpeechTimer();
   state.noSpeechTimer = window.setTimeout(() => {
     if (!state.listening) return;
-    setListeningState("no-speech", "Listening, no speech yet", "Silence is okay. If you are speaking and no transcript appears, check mic permission/input or use text fallback.");
+    setListeningState("no-speech", "Interviewer listening", "Silence is okay. If you are speaking and no transcript appears, check mic permission.");
   }, 60000);
 }
 
@@ -1514,7 +1632,7 @@ function currentTranscriptText() {
 
 function realtimeErrorMessage(error) {
   const message = error?.message || "";
-  if (message.includes("Permission") || message.includes("NotAllowedError")) return "Microphone permission was blocked. Allow mic access, then press the mic again.";
+  if (message.includes("Permission") || message.includes("NotAllowedError")) return "Microphone permission was blocked. Allow mic access, then restart the session.";
   if (message.includes("OPENAI_API_KEY")) return "Add OPENAI_API_KEY to a local .env file, then restart the server. The key stays server-side.";
   if (message.includes("404")) return "Voice server is not running. Start the local app server with OPENAI_API_KEY.";
   if (message.includes("Voice start cancelled")) return "Mic paused.";
@@ -1535,6 +1653,10 @@ function answerQuestion(text) {
   const collaborationAnswer = answerCollaborationCheckIn(normalized);
   if (collaborationAnswer) return tone(collaborationAnswer);
   const hidden = Object.fromEntries((scenario.hiddenContext || []).map((fact) => [fact.key, fact.text]));
+  if (isWhyFollowUp(normalized)) {
+    const followUp = answerWhyFollowUp(hidden, scenario);
+    if (followUp) return tone(followUp);
+  }
   const rules = [
     {
       key: "object",
@@ -1543,7 +1665,7 @@ function answerQuestion(text) {
     },
     {
       key: "who",
-      tests: ["who", "user", "persona", "customer", "patient", "caregiver", "audience", "for whom", "for who", "target"],
+      tests: ["who", "user", "persona", "customer", "patient", "caregiver", "audience", "for whom", "for who", "target", "staff", "data center staff", "data-center staff", "technician", "role", "what do they do"],
       answer: hidden.who || scenario.truth.who
     },
     {
@@ -1574,7 +1696,45 @@ function answerQuestion(text) {
   uniqueMatches
     .filter((rule) => rule.key === "constraint")
     .forEach((rule) => addConstraint(rule.answer, "Clarified"));
-  return tone(uniqueMatches.slice(0, 1).map((rule) => rule.answer).join(" "));
+  const selectedRule = uniqueMatches[0];
+  const selectedAnswer = selectedRule.answer;
+  const repeated = state.lastClarificationKey === selectedRule.key && state.lastClarificationAnswer === selectedAnswer;
+  state.lastClarificationKey = selectedRule.key;
+  state.lastClarificationAnswer = selectedAnswer;
+  if (repeated) {
+    return tone(answerWhyFollowUp(hidden, scenario) || `Said differently: ${selectedAnswer}`);
+  }
+  return tone(selectedAnswer);
+}
+
+function isWhyFollowUp(text) {
+  return /^(why|but why|why though|why is that|why does that matter|why do they need that|why are we doing this)\??$/i.test(text.trim());
+}
+
+function answerWhyFollowUp(hidden, scenario) {
+  const key = state.lastClarificationKey;
+  if (!key) {
+    return hidden.goal || scenario.truth.goal;
+  }
+  if (key === "who") {
+    return `They matter because they are closest to the operational risk. The design needs to help them notice the issue, understand impact, and act before it spreads.`;
+  }
+  if (key === "object") {
+    return `Because the prompt is asking for a system response, not just a screen. The important part is how people detect, understand, and safely act on the problem.`;
+  }
+  if (key === "goal") {
+    return `Because the risk is not just missing information; it is delayed action under pressure. Your design should make the right next step clear without hiding uncertainty.`;
+  }
+  if (key === "platform") {
+    return `Because the context changes how people work: dense desktop views support investigation, while mobile or pager surfaces support urgent handoff and escalation.`;
+  }
+  if (key === "constraint") {
+    return `Because constraints are what make the whiteboard realistic. They force you to make tradeoffs instead of designing the ideal version in isolation.`;
+  }
+  if (key === "success") {
+    return `Because success needs evidence. The interview is looking for how you would know the design actually helped, not just whether it sounds useful.`;
+  }
+  return hidden.goal || scenario.truth.goal;
 }
 
 function answerCollaborationCheckIn(text) {
@@ -1685,12 +1845,12 @@ function finalizePhaseHistory() {
 function canInterviewerSpeak(options = {}) {
   if (!state.started || state.ended) return { allowed: false, reason: "ended" };
   if (options.timer) return { allowed: true, reason: "timer" };
-  if (Date.now() < state.quietUntil && !options.direct) return { allowed: false, reason: "quiet" };
+  if (options.direct) return { allowed: true, reason: "direct" };
+  if (Date.now() < state.quietUntil) return { allowed: false, reason: "quiet" };
   updateCanvasIdleState();
   const silentEnough = Date.now() - state.lastCandidateAt >= 8000;
   const canvasIdleEnough = Date.now() - state.lastCanvasActivityAt >= 8000 && !state.canvasActive && !state.typingActive;
   if (state.canvasActive || state.typingActive || !canvasIdleEnough) return { allowed: false, reason: "observing" };
-  if (options.direct) return { allowed: true, reason: "direct" };
   if (silentEnough && canvasIdleEnough) return { allowed: true, reason: "idle" };
   return { allowed: false, reason: "listening" };
 }
@@ -1800,6 +1960,21 @@ function respond(text, isInterjection = false, options = {}) {
   logMessage("interviewer", text);
   els.interviewerState.textContent = "Speaking";
   announce(`Interviewer: ${text}`);
+  const realtimeIsAvailable = state.listening || state.realtimeConnecting || state.realtimeReady || state.realtimeResponseActive || state.realtimeResponseRequested;
+  if (!realtimeIsAvailable) speakInterviewerText(text);
+}
+
+function speakInterviewerText(text) {
+  if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 0.92;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  utterance.onend = updateInterviewerState;
+  utterance.onerror = updateInterviewerState;
+  els.interviewerState.textContent = "Speaking";
+  window.speechSynthesis.speak(utterance);
 }
 
 function sanitizeInterviewerText(text) {
@@ -2005,6 +2180,10 @@ function offerResumeIfAvailable() {
     els.interviewerLog.innerHTML = "";
     state.transcript.forEach((turn) => logMessage(turn.role, turn.text));
     render();
+    if (state.voiceAvailable) {
+      setListeningState("requesting", "Connecting interviewer", "The interviewer is rejoining and will listen while you work.");
+      startListening();
+    }
   });
 }
 
@@ -2152,10 +2331,6 @@ function markCanvasActivity(kind = "change") {
   state.lastCanvasActivityAt = Date.now();
   state.canvasActive = true;
   state.typingActive = kind === "typing";
-  if (state.realtimeResponseActive) {
-    cancelRealtimeResponse();
-    clearRemoteAudioBuffer();
-  }
   updateInterviewerState();
 }
 
@@ -2767,8 +2942,8 @@ function render() {
   els.difficultySelect.value = state.difficulty;
   renderCompanyPickerLabel();
   els.modeSelect.value = state.mode;
-  els.phaseName.textContent = state.started ? phases[state.phaseIndex].label : state.ended ? "Session ended" : "Not started";
-  els.phaseHint.textContent = state.started ? phaseHint(phases[state.phaseIndex].id) : state.ended ? "Debrief is ready. Start again when you want another run." : "Start when you are ready.";
+  els.phaseName.textContent = state.started ? phases[state.phaseIndex].label : state.ended ? "Session complete" : "Not started";
+  els.phaseHint.textContent = state.started ? phaseHint(phases[state.phaseIndex].id) : state.ended ? `Ended at ${state.endedAtText || "session end"}. Challenge: ${scenario.prompt}` : "Start when you are ready.";
   els.sessionClock.textContent = state.started ? formatTime(Math.max(0, totalSessionMs() - state.elapsed)) : formatTime(totalSessionMs());
   els.budgetLabel.textContent = "";
   els.startSession.disabled = state.started;
@@ -2778,15 +2953,14 @@ function render() {
   els.sendTurn.disabled = !state.started || state.ended;
   els.voiceToggle.disabled = !state.started || state.ended || !state.voiceAvailable;
   els.voiceToggle.setAttribute("aria-pressed", String(state.listening || state.realtimeConnecting));
-  els.voiceToggle.setAttribute("aria-label", state.listening || state.realtimeConnecting ? "Pause listening" : "Resume listening");
+  els.voiceToggle.setAttribute("aria-label", state.listening || state.realtimeConnecting ? "Interviewer is listening" : "Reconnect interviewer voice");
   renderFrameworkTracker();
   renderConstraintLedger();
   renderCallCounter();
   updateInterviewerState();
-  if (!state.started && !state.ended && state.voiceAvailable) setListeningState("idle", "Not listening yet", "Start begins listening automatically.");
+  if (!state.started && !state.ended && state.voiceAvailable) setListeningState("idle", "Ready", "Start connects the interviewer automatically.");
   if (state.ended) {
     els.interviewerState.textContent = "Ended";
-    setListeningState("ended", "Mic ended", "Session ended. The debrief is ready.");
   }
 }
 

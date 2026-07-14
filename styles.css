@@ -47,6 +47,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   overflow: hidden;
@@ -302,6 +306,10 @@ body[data-session="running"] #phaseName {
 
 body[data-session="ended"] .statusbar {
   background: var(--md-surface-container-high);
+}
+
+body[data-session="ended"] .listening-panel {
+  display: none;
 }
 
 body[data-phase="wrap"] .time-chip {
@@ -2117,4 +2125,97 @@ body[data-listening="receiving"] .listening-indicator span {
 /* --- 9. Wrap phase: amber timer, calm not alarming --- */
 body[data-phase="wrap"] #sessionClock {
   color: #92400e;
+}
+
+/* Final shell layout guard: the challenge is the focal point. Controls live
+   on their own row so they never collide with the prompt or status strip. */
+.topbar {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  align-items: start !important;
+  gap: 10px !important;
+  min-height: 0 !important;
+  padding: 14px 24px 10px !important;
+  overflow: visible !important;
+}
+
+.challenge-heading {
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+#promptTitle {
+  display: -webkit-box !important;
+  overflow: hidden !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
+  font: 22px/28px var(--font-display) !important;
+  font-weight: 700 !important;
+}
+
+.session-controls {
+  justify-self: stretch !important;
+  align-self: start !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-start !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+}
+
+.statusbar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  min-height: 52px !important;
+  padding: 8px 24px !important;
+  overflow: hidden !important;
+}
+
+.phase-summary {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  flex-wrap: nowrap !important;
+}
+
+#phaseHint {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.statusbar .mic-help {
+  display: none !important;
+}
+
+.session-metrics {
+  flex: 0 0 auto !important;
+  flex-wrap: nowrap !important;
+}
+
+@media (max-width: 1180px) {
+  .topbar {
+    grid-template-columns: 1fr !important;
+    min-height: 0 !important;
+  }
+
+  .session-controls {
+    justify-self: stretch !important;
+    justify-content: flex-start !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .statusbar {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .session-metrics {
+    justify-content: flex-start !important;
+    overflow-x: auto !important;
+  }
 }

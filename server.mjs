@@ -67,7 +67,7 @@ async function createRealtimeToken(request, response) {
               prefix_padding_ms: 300,
               silence_duration_ms: 900,
               create_response: false,
-              interrupt_response: true
+              interrupt_response: false
             }
           },
           output: { voice }
