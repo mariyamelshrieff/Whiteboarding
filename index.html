@@ -28,9 +28,18 @@
             <option value="medium">Medium</option>
             <option value="hard" selected>Hard</option>
           </select>
+          <details id="companyPicker" class="company-picker">
+            <summary id="companyPickerLabel">Google</summary>
+            <div class="company-menu" role="group" aria-label="Company filter">
+              <label><input type="checkbox" name="company" value="Google" checked /> Google</label>
+              <label><input type="checkbox" name="company" value="Meta" /> Meta</label>
+              <label><input type="checkbox" name="company" value="Netflix" /> Netflix</label>
+              <label><input type="checkbox" name="company" value="Apple" /> Apple</label>
+            </div>
+          </details>
           <select id="modeSelect" aria-label="Session length">
-            <option value="full">45 min</option>
-            <option value="express">20 min</option>
+            <option value="full">45 min · Full loop format</option>
+            <option value="express">20 min · Rapid round</option>
           </select>
           <button id="startSession" type="button">Start</button>
           <button id="endSession" type="button">End</button>
@@ -51,6 +60,7 @@
             <span class="material-symbols-rounded" aria-hidden="true">timer</span>
             <span id="sessionClock">0:00</span>
           </div>
+          <span id="callCounter" class="interviewer-chip dev-chip" hidden>0/12 calls</span>
           <button id="voiceToggle" class="mic-toggle" type="button" aria-label="Pause or resume listening">
             <span class="material-symbols-rounded" aria-hidden="true">mic</span>
             <span id="voiceStatus">Mic idle</span>
@@ -95,21 +105,36 @@
         </section>
 
         <aside class="interview-panel" aria-label="Interview">
+          <section id="frameworkTracker" class="framework-tracker" aria-label="Whiteboard framework progress" hidden>
+            <div class="side-section-header">
+              <span>Framework</span>
+              <span id="frameworkModeLabel">Hard mode</span>
+            </div>
+            <ol id="frameworkSteps" class="framework-steps"></ol>
+          </section>
+
+          <section id="constraintLedger" class="constraint-ledger" aria-label="Pinned interview constraints" hidden>
+            <div class="side-section-header">
+              <span>Pinned constraints</span>
+              <span id="constraintCount">0 pinned</span>
+            </div>
+            <ul id="constraintList" class="constraint-list" aria-live="polite"></ul>
+          </section>
+
           <section class="interviewer-card">
             <div class="speaker-row">
               <span>Interview transcript</span>
-              <span id="budgetLabel">0 interruptions</span>
+              <span id="budgetLabel" hidden></span>
             </div>
             <div id="interviewerLog" class="interviewer-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
           </section>
 
-          <details id="transcriptDrawer" class="transcript-drawer">
-            <summary>Full transcript and fallback</summary>
-            <div id="liveTranscript" class="live-transcript" aria-live="polite" aria-label="Live candidate transcript"></div>
-            <p id="canvasFallback" class="assistive-text">Describe what you sketch out loud. This transcript is the non-visual record of the board.</p>
-            <label for="candidateInput">Text fallback</label>
-            <textarea id="candidateInput" aria-describedby="canvasFallback" placeholder="Use this only if voice is unavailable."></textarea>
-            <button id="sendTurn" type="button">Send to interviewer</button>
+          <details id="transcriptDrawer" class="transcript-drawer backup-drawer" hidden>
+            <summary>Text backup</summary>
+            <div id="liveTranscript" class="sr-only" aria-live="polite" aria-label="Live candidate transcript"></div>
+            <label for="candidateInput">Type only if the mic is unavailable</label>
+            <textarea id="candidateInput" placeholder="Ask or answer the interviewer here only as backup."></textarea>
+            <button id="sendTurn" type="button">Send</button>
           </details>
         </aside>
       </section>

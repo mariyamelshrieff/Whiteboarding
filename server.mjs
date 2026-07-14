@@ -1,8 +1,10 @@
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 
 const root = process.cwd();
+loadLocalEnv();
+
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 const model = process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2";
@@ -85,11 +87,14 @@ async function createRealtimeToken(request, response) {
 
 function serveStatic(pathname, response) {
   const safePath = normalize(pathname === "/" ? "/index.html" : pathname).replace(/^(\.\.[/\\])+/, "");
-  const filePath = join(root, safePath);
+  let filePath = join(root, safePath);
   if (!filePath.startsWith(root) || !existsSync(filePath) || !statSync(filePath).isFile()) {
-    response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-    response.end("Not found");
-    return;
+    if (extname(safePath)) {
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Not found");
+      return;
+    }
+    filePath = join(root, "index.html");
   }
   response.writeHead(200, { "Content-Type": mimeTypes[extname(filePath)] || "application/octet-stream" });
   createReadStream(filePath).pipe(response);
@@ -119,4 +124,22 @@ function readJson(request) {
 function sendJson(response, status, payload) {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(payload));
+}
+
+function loadLocalEnv() {
+  const envPath = join(root, ".env");
+  if (!existsSync(envPath)) return;
+  const lines = readFileSync(envPath, "utf8").split(/\r?\n/);
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return;
+    const equalsIndex = trimmed.indexOf("=");
+    if (equalsIndex < 1) return;
+    const key = trimmed.slice(0, equalsIndex).trim();
+    let value = trimmed.slice(equalsIndex + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!process.env[key]) process.env[key] = value;
+  });
 }
