@@ -6,14 +6,19 @@
     <title>Whiteboard Interview Simulator</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&family=Roboto:wght@400;500;700&family=Roboto+Flex:opsz,wght@8..144,500..700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@excalidraw/excalidraw@0.18.0/dist/prod/index.css?v=2" />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./astryx-theme.css" />
   </head>
   <body>
     <main class="app">
       <header class="topbar">
         <div class="challenge-heading">
+          <div class="brand-lockup" aria-label="Whiteboard practice">
+            <span class="brand-mark" aria-hidden="true">W</span>
+            <span>Whiteboard practice</span>
+          </div>
           <p class="eyebrow">Design challenge</p>
           <h1 id="promptTitle">Design a system for appealing a policy violation.</h1>
           <p class="app-name">Whiteboard Interview Simulator</p>
@@ -28,9 +33,18 @@
             <option value="medium">Medium</option>
             <option value="hard" selected>Hard</option>
           </select>
+          <details id="companyPicker" class="company-picker">
+            <summary id="companyPickerLabel">Google</summary>
+            <div class="company-menu" role="group" aria-label="Company filter">
+              <label><input type="checkbox" name="company" value="Google" checked /> Google</label>
+              <label><input type="checkbox" name="company" value="Meta" /> Meta</label>
+              <label><input type="checkbox" name="company" value="Netflix" /> Netflix</label>
+              <label><input type="checkbox" name="company" value="Apple" /> Apple</label>
+            </div>
+          </details>
           <select id="modeSelect" aria-label="Session length">
-            <option value="full">45 min</option>
-            <option value="express">20 min</option>
+            <option value="full">45 min · Full loop format</option>
+            <option value="express">20 min · Rapid round</option>
           </select>
           <button id="startSession" type="button">Start</button>
           <button id="endSession" type="button">End</button>
@@ -51,9 +65,14 @@
             <span class="material-symbols-rounded" aria-hidden="true">timer</span>
             <span id="sessionClock">0:00</span>
           </div>
+          <span id="callCounter" class="interviewer-chip dev-chip" hidden>0/12 calls</span>
+          <button id="askInterviewer" class="ask-interviewer" type="button" aria-label="Ask the interviewer with your next spoken turn" aria-pressed="false">
+            <span class="material-symbols-rounded" aria-hidden="true">contact_support</span>
+            <span id="askInterviewerLabel">Ask interviewer</span>
+          </button>
           <button id="voiceToggle" class="mic-toggle" type="button" aria-label="Pause or resume listening">
             <span class="material-symbols-rounded" aria-hidden="true">mic</span>
-            <span id="voiceStatus">Mic idle</span>
+            <span id="voiceStatus">Voice ready</span>
           </button>
           <span id="interviewerState" class="interviewer-chip">Silent</span>
         </div>
@@ -83,6 +102,14 @@
         <div id="nextNotes"></div>
       </section>
 
+      <section id="stickyChallenge" class="sticky-challenge" aria-label="Current whiteboard challenge" hidden>
+        <span class="material-symbols-rounded sticky-challenge-icon" aria-hidden="true">assignment</span>
+        <div class="sticky-challenge-copy">
+          <strong>Current challenge</strong>
+          <span id="stickyPrompt"></span>
+        </div>
+      </section>
+
       <section class="workspace">
         <section class="board-panel" aria-label="Shared whiteboard">
           <div id="excalidrawMount" class="excalidraw-mount" aria-label="Excalidraw whiteboard"></div>
@@ -95,21 +122,36 @@
         </section>
 
         <aside class="interview-panel" aria-label="Interview">
+          <section id="frameworkTracker" class="framework-tracker" aria-label="Whiteboard framework progress" hidden>
+            <div class="side-section-header">
+              <span>Framework</span>
+              <span id="frameworkModeLabel">Hard mode</span>
+            </div>
+            <ol id="frameworkSteps" class="framework-steps"></ol>
+          </section>
+
+          <section id="constraintLedger" class="constraint-ledger" aria-label="Pinned interview constraints" hidden>
+            <div class="side-section-header">
+              <span>Pinned constraints</span>
+              <span id="constraintCount">0 pinned</span>
+            </div>
+            <ul id="constraintList" class="constraint-list" aria-live="polite"></ul>
+          </section>
+
           <section class="interviewer-card">
             <div class="speaker-row">
               <span>Interview transcript</span>
-              <span id="budgetLabel">0 interruptions</span>
+              <span id="budgetLabel" hidden></span>
             </div>
             <div id="interviewerLog" class="interviewer-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
           </section>
 
-          <details id="transcriptDrawer" class="transcript-drawer">
-            <summary>Full transcript and fallback</summary>
-            <div id="liveTranscript" class="live-transcript" aria-live="polite" aria-label="Live candidate transcript"></div>
-            <p id="canvasFallback" class="assistive-text">Describe what you sketch out loud. This transcript is the non-visual record of the board.</p>
-            <label for="candidateInput">Text fallback</label>
-            <textarea id="candidateInput" aria-describedby="canvasFallback" placeholder="Use this only if voice is unavailable."></textarea>
-            <button id="sendTurn" type="button">Send to interviewer</button>
+          <details id="transcriptDrawer" class="transcript-drawer backup-drawer" hidden>
+            <summary>Text backup</summary>
+            <div id="liveTranscript" class="sr-only" aria-live="polite" aria-label="Live candidate transcript"></div>
+            <label for="candidateInput">Type only if the mic is unavailable</label>
+            <textarea id="candidateInput" placeholder="Ask or answer the interviewer here only as backup."></textarea>
+            <button id="sendTurn" type="button">Send</button>
           </details>
         </aside>
       </section>

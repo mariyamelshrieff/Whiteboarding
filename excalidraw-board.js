@@ -9,12 +9,14 @@ if (!mount) {
   bridge?.onError?.("Whiteboard mount was not found.");
 } else {
   const root = createRoot(mount);
+  const restoredElements = Array.isArray(window.__WHITEBOARD_RESTORE_SCENE__) ? window.__WHITEBOARD_RESTORE_SCENE__ : [];
   root.render(
     React.createElement(Excalidraw, {
       initialData: {
+        elements: restoredElements,
         appState: {
-          viewBackgroundColor: "#fdfcff",
-          currentItemStrokeColor: "#1b1b1f",
+          viewBackgroundColor: "#fffefd",
+          currentItemStrokeColor: "#15110c",
           currentItemBackgroundColor: "transparent",
           currentItemFontFamily: 1,
           currentItemFontSize: 20,

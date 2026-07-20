@@ -207,36 +207,259 @@ const scenarios = [
 
 const phasePlans = {
   express: [
-    { id: "frame", label: "Framing", ms: 4 * 60 * 1000 },
-    { id: "explore", label: "Exploration", ms: 6 * 60 * 1000 },
-    { id: "deep", label: "Deep dive", ms: 5 * 60 * 1000 },
-    { id: "push", label: "Pushback", ms: 3 * 60 * 1000 },
-    { id: "wrap", label: "Wrap-up", ms: 2 * 60 * 1000 }
+    { id: "prompt", label: "Prompt", ms: 1 * 60 * 1000 },
+    { id: "clarify", label: "Clarify", ms: 3 * 60 * 1000 },
+    { id: "framing", label: "Framing", ms: 4 * 60 * 1000 },
+    { id: "explore", label: "Explore / deep dive", ms: 8 * 60 * 1000 },
+    { id: "wrap", label: "Wrap-up", ms: 4 * 60 * 1000 }
   ],
   full: [
-    { id: "frame", label: "Framing", ms: 8 * 60 * 1000 },
-    { id: "explore", label: "Exploration", ms: 12 * 60 * 1000 },
-    { id: "deep", label: "Deep dive", ms: 12 * 60 * 1000 },
-    { id: "push", label: "Pushback", ms: 8 * 60 * 1000 },
-    { id: "wrap", label: "Wrap-up", ms: 5 * 60 * 1000 }
+    { id: "prompt", label: "Prompt", ms: 2 * 60 * 1000 },
+    { id: "clarify", label: "Clarify", ms: 6 * 60 * 1000 },
+    { id: "framing", label: "Framing", ms: 7 * 60 * 1000 },
+    { id: "explore", label: "Explore / deep dive", ms: 20 * 60 * 1000 },
+    { id: "wrap", label: "Wrap-up", ms: 10 * 60 * 1000 }
   ]
 };
+
+const frameworkSteps = [
+  { id: "frame", label: "Goals & constraints" },
+  { id: "user", label: "User & empathy" },
+  { id: "flow", label: "Journey / flow" },
+  { id: "system", label: "System tradeoffs" },
+  { id: "wire", label: "Wire-level sketch" },
+  { id: "validate", label: "Metrics & risks" }
+];
+
+const challengeFamilies = {
+  "google-data-center-anomaly-dashboard": "systems",
+  "google-travel-flight-delay-remediation": "systems",
+  "appeal-policy": "constraint-led",
+  "hacked-account": "constraint-led",
+  "ai-agent-dashboard": "systems",
+  "enterprise-admin-onboarding": "blue-sky",
+  "gmail-search": "improve-x",
+  "calendar-scheduling": "improve-x",
+  "drive-permissions": "improve-x",
+  "workspace-collaboration": "systems",
+  "notification-priority": "systems",
+  "ai-email-prioritization": "blue-sky",
+  "ai-research-assistant": "blue-sky",
+  "crm-meeting-prep": "blue-sky",
+  "crm-follow-up": "blue-sky",
+  "permission-model": "systems",
+  "ai-explanations": "systems"
+};
+
+scenarios.push(
+  {
+    id: "meta-content-moderation-appeals",
+    prompt: "Design a better appeal and resolution experience for creators whose content was removed incorrectly.",
+    truth: {
+      object: "A creator-facing appeal workflow with reviewer handoff, status clarity, and trust repair.",
+      who: "Creators, small businesses, policy reviewers, and support operations teams.",
+      platform: "Mobile-first creator tools with web support and notification surfaces.",
+      goal: "Help creators understand decisions, provide useful evidence, and recover trust without exposing abuse-detection details.",
+      constraint: "The system must handle high volume, adversarial misuse, and global policy differences.",
+      curveball: "Policy Ops says reviewer capacity is cut by 40% this quarter."
+    }
+  },
+  {
+    id: "meta-family-privacy-sharing",
+    prompt: "Design privacy controls for sharing family photos across a social graph.",
+    truth: {
+      object: "A privacy and sharing model for sensitive family content across overlapping audiences.",
+      who: "Parents, relatives, close friends, teens, and people tagged in shared media.",
+      platform: "Mobile social app with feed, messaging, albums, and notification surfaces.",
+      goal: "Make sharing feel fast while preventing accidental exposure to the wrong audience.",
+      constraint: "Audience models are hard to understand and mistakes can cause real harm.",
+      curveball: "Research shows users misunderstand one key audience label in 30% of tests."
+    }
+  },
+  {
+    id: "netflix-household-travel-access",
+    prompt: "Design account access for Netflix members who travel frequently or split time across households.",
+    truth: {
+      object: "A household access and verification experience that balances paid sharing policy with member empathy.",
+      who: "Primary account owners, family members, travelers, students, and customer support agents.",
+      platform: "TV, mobile, web account settings, email, and support flows.",
+      goal: "Reduce unfair lockouts while preserving business rules around account sharing.",
+      constraint: "TV input is slow, support contacts are expensive, and fraud patterns are adversarial.",
+      curveball: "Data shows legitimate travelers and password-sharing abusers look identical in telemetry."
+    }
+  },
+  {
+    id: "netflix-content-discovery-confidence",
+    prompt: "Improve content discovery when a Netflix member is unsure what they want to watch.",
+    truth: {
+      object: "A discovery and decision-support experience for choosing what to watch under uncertainty.",
+      who: "Members browsing alone, couples/groups choosing together, and returning users with partial watch history.",
+      platform: "TV-first browsing with mobile companion support.",
+      goal: "Reduce browsing fatigue and increase confident starts without making the service feel repetitive.",
+      constraint: "Recommendations can be accurate but still feel stale or over-personalized.",
+      curveball: "A/B testing shows faster starts increase short-term plays but reduce satisfaction later."
+    }
+  },
+  {
+    id: "apple-health-medication-routine",
+    prompt: "Design a medication routine experience for Apple Health that helps people stay adherent without feeling nagged.",
+    truth: {
+      object: "A medication tracking and reminder system that supports routines, exceptions, and caregiver trust.",
+      who: "People managing recurring medication, caregivers, clinicians, and family supporters.",
+      platform: "iPhone, Apple Watch, Health app, notifications, and optional caregiver sharing.",
+      goal: "Help users take medication safely and consistently while preserving privacy and dignity.",
+      constraint: "Health data is sensitive, reminders can create alarm fatigue, and missed doses need careful escalation.",
+      curveball: "Clinical advisors say the app must distinguish skipped, delayed, and unknown doses."
+    }
+  },
+  {
+    id: "apple-cross-device-continuity",
+    prompt: "Design cross-device continuity for starting a focused task on iPhone and finishing it on Mac.",
+    truth: {
+      object: "A continuity model that preserves task state, privacy, and user intent across Apple devices.",
+      who: "People moving between phone, tablet, watch, and desktop during work or personal tasks.",
+      platform: "iOS, macOS, iPadOS, notifications, widgets, handoff, and system settings.",
+      goal: "Make task continuation feel obvious and trustworthy without surprising users.",
+      constraint: "Some tasks involve private content, locked devices, or shared family devices.",
+      curveball: "Privacy review says previews cannot reveal sensitive task content on locked screens."
+    }
+  }
+);
+
+const challengeCompanies = {
+  "google-data-center-anomaly-dashboard": ["Google"],
+  "google-travel-flight-delay-remediation": ["Google"],
+  "appeal-policy": ["Google", "Meta"],
+  "hacked-account": ["Google", "Meta", "Apple"],
+  "ai-agent-dashboard": ["Google", "Meta"],
+  "enterprise-admin-onboarding": ["Google", "Meta", "Apple"],
+  "gmail-search": ["Google"],
+  "calendar-scheduling": ["Google"],
+  "drive-permissions": ["Google"],
+  "workspace-collaboration": ["Google"],
+  "notification-priority": ["Google", "Apple"],
+  "ai-email-prioritization": ["Google", "Apple"],
+  "ai-research-assistant": ["Google", "Meta", "Apple"],
+  "crm-meeting-prep": ["Google", "Meta"],
+  "crm-follow-up": ["Google", "Meta"],
+  "permission-model": ["Google", "Meta", "Apple"],
+  "ai-explanations": ["Google", "Meta", "Apple"],
+  "meta-content-moderation-appeals": ["Meta"],
+  "meta-family-privacy-sharing": ["Meta"],
+  "netflix-household-travel-access": ["Netflix"],
+  "netflix-content-discovery-confidence": ["Netflix"],
+  "apple-health-medication-routine": ["Apple"],
+  "apple-cross-device-continuity": ["Apple"]
+};
+
+const publicChallengePrompts = {
+  "google-data-center-anomaly-dashboard": "Design a way for data-center staff to catch hardware problems before they spread.",
+  "google-travel-flight-delay-remediation": "Design a way to help travelers recover from a flight delay.",
+  "appeal-policy": "Design a way for people to challenge a decision they think is wrong.",
+  "hacked-account": "Design a way for people to get back into an account they no longer control.",
+  "ai-agent-dashboard": "Design a way to monitor automated work before it causes harm.",
+  "enterprise-admin-onboarding": "Design a way for a new administrator to set up a complex product.",
+  "gmail-search": "Design a better way to find something buried in messages.",
+  "calendar-scheduling": "Design a better way to schedule time with other people.",
+  "drive-permissions": "Design a better way to understand and change access.",
+  "workspace-collaboration": "Design a way for teams to keep context as work moves between tools.",
+  "notification-priority": "Design a way to help people notice what matters.",
+  "ai-email-prioritization": "Design a way for AI to help people decide what needs attention.",
+  "ai-research-assistant": "Design a way for AI to help someone research a topic.",
+  "crm-meeting-prep": "Design a way to help someone prepare for an important customer conversation.",
+  "crm-follow-up": "Design a way to follow up after a customer conversation.",
+  "permission-model": "Design a reusable way to manage who can do what.",
+  "ai-explanations": "Design a reusable way to explain an AI suggestion.",
+  "meta-content-moderation-appeals": "Design a way for creators to recover when something was removed incorrectly.",
+  "meta-family-privacy-sharing": "Design a safer way to share sensitive photos.",
+  "netflix-household-travel-access": "Design a way for members to keep access when their situation changes.",
+  "netflix-content-discovery-confidence": "Design a way to help someone choose what to watch.",
+  "apple-health-medication-routine": "Design a way to support a recurring health routine.",
+  "apple-cross-device-continuity": "Design a way to continue a task across devices."
+};
+
+const defaultConstraintDeck = [
+  "Cut the V1 scope in half. What survives?",
+  "Assume the user is on mobile, one-handed, with spotty connectivity.",
+  "Legal says the team cannot store sensitive history locally.",
+  "Engineering says the real-time API is not available for launch.",
+  "Accessibility review says the current flow must work fully by keyboard and screen reader."
+];
+
+const familyHiddenContext = {
+  systems: ["The team cares more about durable system behavior than a single polished screen.", "Success depends on how the experience behaves across surfaces and failure states."],
+  "improve-x": ["The existing product is widely used, so migration and user trust matter.", "The team needs evidence that the change improves behavior without breaking learned workflows."],
+  "constraint-led": ["The riskiest part of the problem is misuse, privacy, or account safety.", "The business wants speed, but trust and abuse prevention cannot regress."],
+  "blue-sky": ["The team expects you to define the first valuable wedge.", "A good answer narrows ambiguity without pretending the whole product can ship at once."]
+};
+
+scenarios.forEach((scenario) => {
+  const family = challengeFamilies[scenario.id] || "blue-sky";
+  scenario.fullPrompt = scenario.prompt;
+  scenario.prompt = publicChallengePrompts[scenario.id] || scenario.prompt;
+  scenario.family = family;
+  scenario.companies = challengeCompanies[scenario.id] || ["Google"];
+  scenario.hiddenContext = [
+    { key: "object", text: scenario.truth.object },
+    { key: "who", text: scenario.truth.who },
+    { key: "platform", text: scenario.truth.platform },
+    { key: "goal", text: scenario.truth.goal },
+    { key: "constraint", text: scenario.truth.constraint },
+    { key: "success", text: scenario.truth.successMetric || familyHiddenContext[family][1] }
+  ];
+  scenario.constraints = [
+    scenario.truth.curveball,
+    ...defaultConstraintDeck,
+    ...familyHiddenContext[family]
+  ].slice(0, 5);
+});
 
 const state = {
   scenarioIndex: 0,
   difficulty: "hard",
+  companies: ["Google"],
   mode: "full",
   started: false,
   ended: false,
   transcript: [],
+  runningSummary: "",
+  realtimeItems: [],
   revealed: new Set(),
+  constraints: [],
+  assumptions: [],
+  usedConstraintTexts: new Set(),
   curveballUsed: false,
   phaseIndex: 0,
   phaseElapsed: 0,
+  phaseHistory: [],
+  lastPhaseChangeAt: 0,
+  endedAtText: "",
   elapsed: 0,
   lastInterjectionAt: 0,
   lastCandidateAt: 0,
   lastCandidateQuestionAt: 0,
+  directQuestionUntil: 0,
+  clarifyNudgeUsed: false,
+  wrapMetricsPrompted: false,
+  wrapMoreTimePrompted: false,
+  wrapSummaryPrompted: false,
+  timeCalled: false,
+  quietUntil: 0,
+  canvasActive: false,
+  typingActive: false,
+  lastCanvasActivityAt: 0,
+  sceneCaptureTimer: null,
+  autosaveTimer: null,
+  transcriptAutoScroll: true,
+  modelCallCount: 0,
+  modelCallLimit: 12,
+  pendingOpening: false,
+  skipNextInterviewerTranscript: false,
+  tabId: globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  queuedRealtimeInstructions: "",
+  queuedRealtimeOptions: null,
+  lastClarificationKey: "",
+  lastClarificationAnswer: "",
   timer: null,
   tool: "select",
   drawing: false,
@@ -248,8 +471,10 @@ const state = {
   activeStroke: null,
   lastPoint: null,
   boardElements: [],
+  sceneElementsRaw: [],
   boardText: "",
   boardSummary: "",
+  lastSentSceneSignature: "",
   lastBoardActivityAt: 0,
   boardPrompted: false,
   firstBoardNudgeAt: 0,
@@ -258,6 +483,7 @@ const state = {
   realtimeReady: false,
   realtimeConnecting: false,
   realtimeResponseActive: false,
+  realtimeResponseRequested: false,
   localStream: null,
   remoteStream: null,
   remoteAudio: null,
@@ -273,20 +499,34 @@ const state = {
 
 const els = {
   promptTitle: document.querySelector("#promptTitle"),
+  stickyChallenge: document.querySelector("#stickyChallenge"),
+  stickyPrompt: document.querySelector("#stickyPrompt"),
   shuffleChallenge: document.querySelector("#shuffleChallenge"),
   difficultySelect: document.querySelector("#difficultySelect"),
+  companyPicker: document.querySelector("#companyPicker"),
+  companyPickerLabel: document.querySelector("#companyPickerLabel"),
+  companyCheckboxes: document.querySelectorAll("input[name='company']"),
   modeSelect: document.querySelector("#modeSelect"),
   startSession: document.querySelector("#startSession"),
   endSession: document.querySelector("#endSession"),
   phaseName: document.querySelector("#phaseName"),
   phaseHint: document.querySelector("#phaseHint"),
+  frameworkTracker: document.querySelector("#frameworkTracker"),
+  frameworkSteps: document.querySelector("#frameworkSteps"),
+  frameworkModeLabel: document.querySelector("#frameworkModeLabel"),
+  constraintLedger: document.querySelector("#constraintLedger"),
+  constraintCount: document.querySelector("#constraintCount"),
+  constraintList: document.querySelector("#constraintList"),
   sessionClock: document.querySelector("#sessionClock"),
+  callCounter: document.querySelector("#callCounter"),
   interviewerState: document.querySelector("#interviewerState"),
   budgetLabel: document.querySelector("#budgetLabel"),
   interviewerLog: document.querySelector("#interviewerLog"),
   candidateInput: document.querySelector("#candidateInput"),
   sendTurn: document.querySelector("#sendTurn"),
   voiceToggle: document.querySelector("#voiceToggle"),
+  askInterviewer: document.querySelector("#askInterviewer"),
+  askInterviewerLabel: document.querySelector("#askInterviewerLabel"),
   voiceStatus: document.querySelector("#voiceStatus"),
   micHelp: document.querySelector("#micHelp"),
   listeningTitle: document.querySelector("#listeningTitle"),
@@ -311,19 +551,41 @@ const els = {
 
 const ctx = els.board?.getContext("2d");
 const theme = getComputedStyle(document.documentElement);
+const voiceOwnerKey = "whiteboard-sim-active-voice-tab";
+let voiceChannel = null;
+let microphoneResumeTimer = null;
 
 function init() {
   window.speechSynthesis?.cancel();
-  bindEvents();
   setupVoice();
+  setupVoiceOwnership();
+  offerResumeIfAvailable();
+  bindEvents();
+  setupStickyChallenge();
   setupBoard();
   render();
+}
+
+function setupStickyChallenge() {
+  if (!els.stickyChallenge || !els.promptTitle) return;
+  if (!("IntersectionObserver" in window)) {
+    els.stickyChallenge.hidden = false;
+    return;
+  }
+  const observer = new IntersectionObserver(([entry]) => {
+    els.stickyChallenge.hidden = entry.isIntersecting;
+  }, { threshold: 0.05 });
+  observer.observe(els.promptTitle);
 }
 
 function bindEvents() {
   els.shuffleChallenge.addEventListener("click", shuffleChallenge);
   els.difficultySelect.addEventListener("change", () => {
     state.difficulty = els.difficultySelect.value;
+    render();
+  });
+  els.companyCheckboxes.forEach((checkbox) => {
+    checkbox.addEventListener("change", updateCompanyFilter);
   });
   els.modeSelect.addEventListener("change", () => {
     state.mode = els.modeSelect.value;
@@ -332,7 +594,11 @@ function bindEvents() {
   els.startSession.addEventListener("click", startSession);
   els.endSession.addEventListener("click", endSession);
   els.sendTurn.addEventListener("click", submitCandidateTurn);
-  els.voiceToggle.addEventListener("click", toggleVoice);
+  els.voiceToggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (state.started && !state.ended && !state.listening && !state.realtimeConnecting) startListening();
+  });
+  els.askInterviewer.addEventListener("click", armDirectQuestion);
   els.undoBoard?.addEventListener("click", undoBoard);
   els.redoBoard?.addEventListener("click", redoBoard);
   els.zoomOut?.addEventListener("click", () => zoomBoard(0.88));
@@ -341,6 +607,10 @@ function bindEvents() {
   els.boardTextEditor?.addEventListener("keydown", handleBoardTextKeydown);
   els.candidateInput.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitCandidateTurn();
+  });
+  els.interviewerLog.addEventListener("scroll", () => {
+    const remaining = els.interviewerLog.scrollHeight - els.interviewerLog.clientHeight - els.interviewerLog.scrollTop;
+    state.transcriptAutoScroll = remaining < 24;
   });
   document.querySelectorAll(".tool").forEach((button) => {
     if (button.classList.contains("action-tool")) return;
@@ -358,49 +628,92 @@ function startSession() {
   if (state.ended) resetSession();
   state.started = true;
   state.ended = false;
+  state.lastPhaseChangeAt = 0;
+  state.phaseHistory = [{ id: currentPhase().id, label: currentPhase().label, startedAt: 0, endedAt: null }];
   state.lastCandidateAt = Date.now();
+  state.lastCanvasActivityAt = Date.now();
   state.lastInterjectionAt = 0;
-  logMessage("interviewer", openingLine());
-  announce(`Interviewer: ${openingLine()}`);
-  setListeningState("requesting", "Requesting microphone", "Allow microphone access if your browser asks. I will keep listening while you draw.");
+  const prompt = openingLine();
+  logMessage("interviewer", prompt);
+  announce(`Interviewer: ${prompt}`);
+  state.pendingOpening = true;
+  setListeningState("requesting", "Connecting interviewer", "The interviewer is joining and will listen while you work.");
   startListening();
   state.timer = setInterval(tick, 1000);
+  state.autosaveTimer = setInterval(saveSessionSnapshot, 10000);
+  saveSessionSnapshot();
   render();
 }
 
 function endSession() {
   if (!state.started) return;
+  finalizePhaseHistory();
   state.ended = true;
   state.started = false;
+  state.endedAtText = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   clearInterval(state.timer);
+  clearInterval(state.autosaveTimer);
   state.timer = null;
+  state.autosaveTimer = null;
   stopListening();
   showDebrief();
+  clearSessionSnapshot();
   render();
 }
 
 function resetSession() {
   clearInterval(state.timer);
+  clearInterval(state.autosaveTimer);
+  clearSceneCaptureTimer();
   stopListening();
   Object.assign(state, {
     started: false,
     ended: false,
     transcript: [],
+    runningSummary: "",
+    realtimeItems: [],
     revealed: new Set(),
+    constraints: [],
+    assumptions: [],
+    usedConstraintTexts: new Set(),
     curveballUsed: false,
     phaseIndex: 0,
     phaseElapsed: 0,
+    phaseHistory: [],
+    lastPhaseChangeAt: 0,
+    endedAtText: "",
     elapsed: 0,
     lastInterjectionAt: 0,
     lastCandidateAt: 0,
     lastCandidateQuestionAt: 0,
+    directQuestionUntil: 0,
+    clarifyNudgeUsed: false,
+    wrapMetricsPrompted: false,
+    wrapMoreTimePrompted: false,
+    wrapSummaryPrompted: false,
+    timeCalled: false,
+    quietUntil: 0,
+    canvasActive: false,
+    typingActive: false,
+    lastCanvasActivityAt: 0,
+    autosaveTimer: null,
+    transcriptAutoScroll: true,
+    modelCallCount: 0,
+    pendingOpening: false,
+    skipNextInterviewerTranscript: false,
+    queuedRealtimeInstructions: "",
+    queuedRealtimeOptions: null,
+    lastClarificationKey: "",
+    lastClarificationAnswer: "",
     timer: null,
     strokes: [],
     redoStack: [],
     activeStroke: null,
     boardElements: [],
+    sceneElementsRaw: [],
     boardText: "",
     boardSummary: "",
+    lastSentSceneSignature: "",
     selectedId: null,
     textEditing: null,
     lastBoardActivityAt: 0,
@@ -411,6 +724,7 @@ function resetSession() {
     realtimeReady: false,
     realtimeConnecting: false,
     realtimeResponseActive: false,
+    realtimeResponseRequested: false,
     localStream: null,
     remoteStream: null,
     remoteAudio: null,
@@ -432,10 +746,39 @@ function resetSession() {
 
 function shuffleChallenge() {
   if (state.started) return;
-  const nextIndex = (state.scenarioIndex + 1 + Math.floor(Math.random() * (scenarios.length - 1))) % scenarios.length;
-  state.scenarioIndex = nextIndex;
+  const candidates = scenarios
+    .map((scenario, index) => ({ scenario, index }))
+    .filter((item) => scenarioMatchesSelectedCompanies(item.scenario))
+    .filter((item) => item.index !== state.scenarioIndex);
+  const next = candidates[Math.floor(Math.random() * candidates.length)] || { index: (state.scenarioIndex + 1) % scenarios.length };
+  state.scenarioIndex = next.index;
   resetSession();
   announce(`New design challenge: ${scenarios[state.scenarioIndex].prompt}`);
+}
+
+function updateCompanyFilter() {
+  const selected = [...els.companyCheckboxes].filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.value);
+  state.companies = selected.length ? selected : ["Google"];
+  if (!selected.length) {
+    const google = [...els.companyCheckboxes].find((checkbox) => checkbox.value === "Google");
+    if (google) google.checked = true;
+  }
+  renderCompanyPickerLabel();
+  if (!scenarioMatchesSelectedCompanies(scenarios[state.scenarioIndex])) shuffleChallenge();
+  else render();
+}
+
+function scenarioMatchesSelectedCompanies(scenario) {
+  return (scenario.companies || ["Google"]).some((company) => state.companies.includes(company));
+}
+
+function renderCompanyPickerLabel() {
+  if (!els.companyPickerLabel) return;
+  els.companyCheckboxes.forEach((checkbox) => {
+    checkbox.checked = state.companies.includes(checkbox.value);
+  });
+  els.companyPickerLabel.textContent = state.companies.length === 1 ? state.companies[0] : `${state.companies.length} companies`;
+  els.companyPickerLabel.setAttribute("aria-label", `Companies: ${state.companies.join(", ")}`);
 }
 
 function submitCandidateTurn() {
@@ -452,14 +795,21 @@ function submitCandidateTurn() {
 
 function processCandidateTurn(text, options = {}) {
   state.lastCandidateAt = Date.now();
-  state.transcript.push({ role: "candidate", text, at: state.elapsed });
+  recordTranscriptTurn("candidate", text);
   announce(`Candidate: ${text}`);
+
+  if (requestQuietTime(text)) {
+    state.quietUntil = Date.now() + 120000;
+    respond("Of course, take your time.", false, { force: true });
+    render();
+    return;
+  }
 
   const answer = answerQuestion(text);
   if (answer) {
-    respond(answer);
+    respond(answer, false, { force: true });
   } else if (options.forceResponse && shouldInterviewerRespondTo(text)) {
-    respond(interviewerReaction(text));
+    respond(interviewerReaction(text), false, { force: true });
   } else {
     setSilent();
   }
@@ -468,9 +818,48 @@ function processCandidateTurn(text, options = {}) {
 function setupVoice() {
   state.voiceAvailable = Boolean(window.RTCPeerConnection && navigator.mediaDevices?.getUserMedia);
   if (!state.voiceAvailable) {
-    useFallback("This browser cannot open a live WebRTC microphone. Use text fallback.");
+    useFallback("Voice unavailable — continuing without live voice. Your board is safe.");
     els.voiceToggle.disabled = true;
   }
+}
+
+function setupVoiceOwnership() {
+  window.addEventListener("storage", (event) => {
+    if (event.key !== voiceOwnerKey || !event.newValue) return;
+    try {
+      const owner = JSON.parse(event.newValue);
+      handleExternalVoiceClaim(owner.id);
+    } catch {
+      // Ignore malformed ownership records from older builds.
+    }
+  });
+  if ("BroadcastChannel" in window) {
+    voiceChannel = new BroadcastChannel("whiteboard-sim-voice");
+    voiceChannel.addEventListener("message", (event) => {
+      if (event.data?.type === "voice-claimed") handleExternalVoiceClaim(event.data.id);
+    });
+  }
+}
+
+function claimVoiceOwnership() {
+  const owner = { id: state.tabId, at: Date.now() };
+  try {
+    localStorage.setItem(voiceOwnerKey, JSON.stringify(owner));
+  } catch {
+    // Private browsing can block storage; BroadcastChannel still covers modern tabs.
+  }
+  voiceChannel?.postMessage({ type: "voice-claimed", id: state.tabId });
+}
+
+function handleExternalVoiceClaim(ownerId) {
+  if (!ownerId || ownerId === state.tabId) return;
+  if (!state.listening && !state.realtimeConnecting && !state.realtimeReady && !state.realtimeResponseActive) return;
+  state.voiceRunId += 1;
+  state.listening = false;
+  clearNoSpeechTimer();
+  disconnectRealtime();
+  setListeningState("idle", "Voice moved to another tab", "Only one interviewer voice can run at a time.");
+  els.voiceToggle.classList.remove("listening");
 }
 
 function toggleVoice() {
@@ -478,8 +867,69 @@ function toggleVoice() {
   else startListening();
 }
 
+function armDirectQuestion() {
+  if (!state.started || state.ended) return;
+  const alreadyArmed = state.directQuestionUntil > Date.now();
+  state.directQuestionUntil = alreadyArmed ? 0 : Date.now() + 30000;
+  if (!alreadyArmed) {
+    announce("Ask interviewer armed. Your next spoken turn will receive an answer.");
+    setListeningState("listening", "Ask the interviewer", "Speak your question now. The next turn is directed to the interviewer.");
+  }
+  renderAskInterviewer();
+}
+
+function hasDirectQuestionIntent(text = "") {
+  if (state.directQuestionUntil > Date.now()) return true;
+  const normalized = String(text).toLowerCase();
+  return [
+    "interviewer",
+    "hey interviewer",
+    "question for you",
+    "i have a question",
+    "can you answer",
+    "could you answer",
+    "can you clarify",
+    "could you clarify",
+    "can you tell me",
+    "could you tell me"
+  ].some((phrase) => normalized.includes(phrase));
+}
+
+function consumeDirectQuestionIntent(text) {
+  const directed = hasDirectQuestionIntent(text);
+  if (directed) state.directQuestionUntil = 0;
+  renderAskInterviewer();
+  return directed;
+}
+
+function renderAskInterviewer() {
+  if (!els.askInterviewer) return;
+  const armed = state.directQuestionUntil > Date.now();
+  els.askInterviewer.classList.toggle("armed", armed);
+  els.askInterviewer.setAttribute("aria-pressed", String(armed));
+  els.askInterviewerLabel.textContent = armed ? "Ask now…" : "Ask interviewer";
+}
+
+function handlePushToTalkKeydown(event) {
+  if (event.code !== "Space" || event.repeat || !state.started || state.ended) return;
+  const target = event.target;
+  const isTyping = ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName) || target?.isContentEditable;
+  const isCanvasWork = target?.closest?.(".excalidraw");
+  if (isTyping || isCanvasWork) return;
+  event.preventDefault();
+  if (!state.listening && !state.realtimeConnecting) startListening();
+}
+
+function handlePushToTalkKeyup(event) {
+  if (event.code !== "Space" || !state.started || state.ended) return;
+  const target = event.target;
+  if (target?.closest?.(".excalidraw")) return;
+  if (state.listening || state.realtimeConnecting) stopListening();
+}
+
 async function startListening() {
   if (!state.voiceAvailable || state.listening || state.realtimeConnecting || !state.started || state.ended) return;
+  claimVoiceOwnership();
   const runId = state.voiceRunId + 1;
   state.voiceRunId = runId;
   state.listening = true;
@@ -488,7 +938,7 @@ async function startListening() {
   try {
     await connectRealtime(runId);
     if (!isActiveVoiceRun(runId)) return;
-    setListeningState("listening", "Listening", "Speak naturally while you draw. Your words will appear here.");
+    setListeningState("listening", "Interviewer listening", "Think out loud. The interviewer will answer direct questions and otherwise observe.");
     armNoSpeechTimer();
   } catch (error) {
     if (!isActiveVoiceRun(runId)) return;
@@ -504,7 +954,10 @@ function stopListening() {
   state.voiceRunId += 1;
   state.listening = false;
   clearNoSpeechTimer();
-  setListeningState(state.ended ? "ended" : "paused", state.ended ? "Mic ended" : "Mic paused", state.ended ? "" : "Listening paused. Press the mic to resume.");
+  setListeningState(
+    state.ended ? "ended" : "Interviewer disconnected",
+    state.ended ? "Session complete" : "Start again to reconnect the interviewer."
+  );
   els.voiceToggle.classList.remove("listening");
   disconnectRealtime();
 }
@@ -527,7 +980,14 @@ async function connectRealtime(runId) {
 
   const pc = new RTCPeerConnection();
   const dc = pc.createDataChannel("oai-events");
-  const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const localStream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1
+    }
+  });
   if (!isActiveVoiceRun(runId)) {
     localStream.getTracks().forEach((track) => track.stop());
     pc.close();
@@ -542,7 +1002,7 @@ async function connectRealtime(runId) {
   };
   pc.onconnectionstatechange = () => {
     if (isActiveVoiceRun(runId) && ["failed", "disconnected", "closed"].includes(pc.connectionState) && state.started && !state.ended) {
-      useFallback("Live voice disconnected. Use text fallback, or press the mic to retry.");
+      useFallback("Voice unavailable — continuing without live voice. Your board is safe. Press the mic to retry.");
       els.voiceToggle.classList.remove("listening");
     }
   };
@@ -554,8 +1014,11 @@ async function connectRealtime(runId) {
     }
     state.realtimeReady = true;
     state.realtimeConnecting = false;
-    setListeningState("listening", "Listening", "Connected. Think out loud and ask the interviewer questions naturally.");
-    createRealtimeOpening();
+    setListeningState("listening", "Interviewer listening", "Think out loud. The interviewer will answer when you ask them directly.");
+    if (state.pendingOpening) {
+      state.pendingOpening = false;
+      createRealtimeOpening();
+    }
   });
   dc.addEventListener("message", handleRealtimeEvent);
   dc.addEventListener("close", () => {
@@ -586,9 +1049,15 @@ function isActiveVoiceRun(runId) {
 }
 
 function disconnectRealtime() {
+  clearTimeout(microphoneResumeTimer);
+  microphoneResumeTimer = null;
   cancelRealtimeResponse();
   state.realtimeReady = false;
   state.realtimeConnecting = false;
+  state.realtimeResponseActive = false;
+  state.realtimeResponseRequested = false;
+  state.queuedRealtimeInstructions = "";
+  state.queuedRealtimeOptions = null;
   if (state.realtime?.dc) state.realtime.dc.close();
   if (state.realtime?.pc) state.realtime.pc.close();
   state.realtime = null;
@@ -603,74 +1072,112 @@ function disconnectRealtime() {
 function handleRealtimeEvent(message) {
   const event = JSON.parse(message.data);
   if (event.type === "input_audio_buffer.speech_started") {
+    // Ignore echo/noise detected while the interviewer is answering. The mic
+    // is paused for responses, but a buffered VAD event can still arrive.
+    if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
     clearNoSpeechTimer();
     state.lastCandidateAt = Date.now();
     state.interimText = "Listening...";
     setListeningState("receiving", "Hearing you", "I am hearing you. Keep thinking out loud.");
-    cancelRealtimeResponse();
-    clearRemoteAudioBuffer();
     renderLiveTranscript();
     return;
   }
   if (event.type === "input_audio_buffer.speech_stopped") {
+    if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
     state.interimText = "";
-    setListeningState("listening", "Listening", "I heard you. I will stay quiet unless you ask the interviewer to answer.");
+    setListeningState("listening", "Interviewer listening", "I heard you. I will stay quiet unless you ask the interviewer directly.");
     renderLiveTranscript();
     return;
   }
   if (event.type === "conversation.item.input_audio_transcription.completed") {
+    if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
     const text = event.transcript?.trim();
     state.interimText = "";
-    if (text && !state.loggedCandidateItems.has(event.item_id || text)) {
+    if (text && shouldKeepTranscription(text, event) && !state.loggedCandidateItems.has(event.item_id || text)) {
+      const directQuestion = consumeDirectQuestionIntent(text);
       state.loggedCandidateItems.add(event.item_id || text);
       state.transcriptText = `${state.transcriptText} ${text}`.trim();
-      state.transcript.push({ role: "candidate", text, at: state.elapsed });
+      recordTranscriptTurn("candidate", text, { realtimeItemId: event.item_id || "" });
       logMessage("candidate", text);
       announce(`Candidate: ${text}`);
-      if (shouldInterviewerRespondTo(text)) {
-        state.lastCandidateQuestionAt = Date.now();
-        sendRealtimeEvent({
-          type: "response.create",
-          response: { instructions: responseInstructionFor(text) }
-        });
+      if (requestQuietTime(text)) {
+        state.quietUntil = Date.now() + 120000;
+        requestRealtimeResponse('Say exactly: "Of course, take your time." Then stop speaking.', { force: true });
       } else {
-        els.interviewerState.textContent = "Listening";
+        const clarifyingAnswer = answerQuestion(text);
+        if (clarifyingAnswer) {
+          state.lastCandidateQuestionAt = Date.now();
+          requestRealtimeResponse(clarificationResponseInstruction(text, clarifyingAnswer), { force: true });
+        } else if ((directQuestion || shouldInterviewerRespondTo(text)) && canInterviewerSpeak({ direct: true }).allowed) {
+          state.lastCandidateQuestionAt = Date.now();
+          requestRealtimeResponse(responseInstructionFor(text, { directQuestion }));
+        } else {
+          els.interviewerState.textContent = "Listening";
+        }
       }
     }
     renderLiveTranscript();
     return;
   }
+  if (event.type === "conversation.item.created" && event.item?.id) {
+    rememberRealtimeItem(event.item.id, event.item.role || "unknown");
+    return;
+  }
   if (event.type === "response.created") {
     state.realtimeResponseActive = true;
     state.interviewerDraft = "";
-    els.interviewerState.textContent = "Speaking";
+    setMicrophoneCapture(false);
+    updateInterviewerState();
     return;
   }
   if (isRealtimeTextDelta(event)) {
     state.interviewerDraft += event.delta || "";
-    setInterviewerDraft(state.interviewerDraft);
+    // The opening challenge is already rendered synchronously in startSession().
+    // Keep collecting its audio transcript for bookkeeping, but do not render a
+    // second live draft card while the interviewer reads the same text aloud.
+    if (!state.skipNextInterviewerTranscript) setInterviewerDraft(state.interviewerDraft);
     return;
   }
   if (isRealtimeTextDone(event)) {
     state.interviewerDraft = event.transcript || event.text || event.output_text || state.interviewerDraft;
-    setInterviewerDraft(state.interviewerDraft);
+    if (!state.skipNextInterviewerTranscript) setInterviewerDraft(state.interviewerDraft);
     return;
   }
   if (event.type === "response.done") {
     state.realtimeResponseActive = false;
+    state.realtimeResponseRequested = false;
     const finalText = extractRealtimeResponseText(event) || state.interviewerDraft;
     if (finalText.trim()) {
-      const text = finalText.trim();
-      state.transcript.push({ role: "interviewer", text, at: state.elapsed });
-      replaceInterviewerDraft(text);
-      announce(`Interviewer: ${text}`);
+      const text = sanitizeInterviewerText(finalText.trim());
+      if (state.skipNextInterviewerTranscript) {
+        state.skipNextInterviewerTranscript = false;
+        const draft = els.interviewerLog.querySelector("[data-draft='true']");
+        if (draft) draft.remove();
+      } else {
+        recordTranscriptTurn("interviewer", text, { realtimeItemIds: responseOutputItemIds(event) });
+        maybePinConstraint(text);
+        replaceInterviewerDraft(text);
+        announce(`Interviewer: ${text}`);
+      }
     }
     state.interviewerDraft = "";
-    els.interviewerState.textContent = "Listening";
+    resumeMicrophoneAfterResponse();
+    updateInterviewerState();
+    flushQueuedRealtimeResponse();
     return;
   }
   if (event.type === "error") {
-    useFallback(event.error?.message || "Realtime voice had an error. Use text fallback.");
+    const message = event.error?.message || "";
+    state.realtimeResponseActive = false;
+    state.realtimeResponseRequested = false;
+    state.interviewerDraft = "";
+    resumeMicrophoneAfterResponse();
+    if (/cancel|no active response/i.test(message)) {
+      setSilent();
+      flushQueuedRealtimeResponse();
+      return;
+    }
+    useFallback("Give me a moment to look at your board.");
   }
 }
 
@@ -700,6 +1207,103 @@ function extractRealtimeResponseText(event) {
     .filter(Boolean)
     .join(" ")
     .trim();
+}
+
+function responseOutputItemIds(event) {
+  return (event.response?.output || []).map((item) => item.id).filter(Boolean);
+}
+
+function recordTranscriptTurn(role, text, extra = {}) {
+  const turn = { role, text, at: state.elapsed, ...extra };
+  state.transcript.push(turn);
+  if (role === "candidate") trackCandidateAssumptions(text);
+  updateRunningSummary();
+  if (extra.realtimeItemId) rememberRealtimeItem(extra.realtimeItemId, role);
+  if (extra.realtimeItemIds) extra.realtimeItemIds.forEach((id) => rememberRealtimeItem(id, role));
+  pruneRealtimeConversationWindow();
+  return turn;
+}
+
+function updateRunningSummary() {
+  const candidateText = state.transcript
+    .filter((turn) => turn.role === "candidate")
+    .map((turn) => turn.text)
+    .join(" ");
+  const facts = [];
+  if (state.revealed.has("who")) facts.push("user/context clarified");
+  if (state.revealed.has("goal")) facts.push("goal clarified");
+  if (state.revealed.has("constraint")) facts.push("constraint clarified");
+  if (frameworkStepHasEvidence("frame")) facts.push("candidate framed the problem");
+  if (frameworkStepHasEvidence("user")) facts.push("candidate named users or context");
+  if (frameworkStepHasEvidence("flow")) facts.push("candidate discussed flow/journey");
+  if (frameworkStepHasEvidence("wire")) facts.push("candidate has board structure or wire-level sketching");
+  if (frameworkStepHasEvidence("validate")) facts.push("candidate mentioned metrics/validation");
+  const assumptionPhrases = extractSummaryPhrases(candidateText, ["assume", "assuming", "scope", "goal", "user", "because"]).slice(-3);
+  const constraints = state.constraints.slice(0, 3).map((item) => item.text);
+  const assumptions = state.assumptions.slice(0, 3).map((item) => item.invalidated ? `${item.text} (invalidated)` : item.text);
+  const parts = [
+    facts.length ? `Progress: ${dedupe(facts).join(", ")}.` : "Progress: no durable framing signal yet.",
+    assumptionPhrases.length || assumptions.length ? `Recent assumptions/rationale: ${[...assumptionPhrases, ...assumptions].slice(-3).join(" / ")}.` : "",
+    constraints.length ? `Pinned constraints: ${constraints.join(" / ")}.` : ""
+  ].filter(Boolean);
+  state.runningSummary = truncateText(parts.join(" "), 700);
+}
+
+function trackCandidateAssumptions(text) {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return;
+  const patterns = [
+    /\b(?:i(?:'ll| will)? assume|i am assuming|i'm assuming|let'?s assume|my assumption is|assuming that)\b([^.!?]{4,140})/i,
+    /\b(?:for v1|for now|i'll scope|i will scope)\b([^.!?]{4,140})/i
+  ];
+  patterns.forEach((pattern) => {
+    const match = normalized.match(pattern);
+    if (!match?.[0]) return;
+    const assumption = truncateText(match[0].trim(), 170);
+    if (state.assumptions.some((item) => item.text.toLowerCase() === assumption.toLowerCase())) return;
+    state.assumptions.unshift({ text: assumption, at: state.elapsed, invalidated: false });
+  });
+  if (state.assumptions.length > 8) state.assumptions.length = 8;
+  renderConstraintLedger();
+}
+
+function extractSummaryPhrases(text, markers) {
+  const sentences = String(text || "").split(/[.!?]+/).map((item) => item.trim()).filter(Boolean);
+  return sentences
+    .filter((sentence) => markers.some((marker) => sentence.toLowerCase().includes(marker)))
+    .map((sentence) => truncateText(sentence, 150));
+}
+
+function dedupe(items) {
+  return [...new Set(items)];
+}
+
+function recentTranscriptWindow(windowMs = 2 * 60 * 1000) {
+  const cutoff = Math.max(0, state.elapsed - windowMs);
+  return state.transcript
+    .filter((turn) => turn.at >= cutoff)
+    .slice(-12)
+    .map((turn) => `${turn.role}: ${turn.text}`)
+    .join(" / ");
+}
+
+function rememberRealtimeItem(itemId, role) {
+  if (!itemId || state.realtimeItems.some((item) => item.id === itemId)) return;
+  state.realtimeItems.push({ id: itemId, role, at: state.elapsed });
+}
+
+function pruneRealtimeConversationWindow() {
+  if (!state.realtime?.dc || state.realtime.dc.readyState !== "open") return;
+  const cutoff = Math.max(0, state.elapsed - 2 * 60 * 1000);
+  const keepTail = state.realtimeItems.slice(-12).map((item) => item.id);
+  const removable = state.realtimeItems.filter((item) => item.at < cutoff && !keepTail.includes(item.id));
+  removable.forEach((item) => {
+    sendRealtimeEvent({ type: "conversation.item.delete", item_id: item.id });
+  });
+  if (removable.length) {
+    const removed = new Set(removable.map((item) => item.id));
+    state.realtimeItems = state.realtimeItems.filter((item) => !removed.has(item.id));
+  }
 }
 
 function shouldInterviewerRespondTo(text) {
@@ -732,6 +1336,13 @@ function shouldInterviewerRespondTo(text) {
     "what happens if"
   ].some((phrase) => normalized.includes(phrase));
   const directedAsk = [
+    "should i",
+    "can you",
+    "could you",
+    "do we",
+    "should we",
+    "is there",
+    "are there",
     "interviewer",
     "can you clarify",
     "could you clarify",
@@ -770,20 +1381,44 @@ function shouldInterviewerRespondTo(text) {
   ].some((phrase) => normalized.includes(phrase));
   if (directedAsk) return true;
   if (selfTalk) return false;
-  if (isQuestion(normalized) && /\b(you|your)\b/.test(normalized)) return true;
+  if (isQuestion(normalized) && /\b(you|your|we)\b/.test(normalized)) return true;
   return false;
 }
 
-function responseInstructionFor(text) {
-  const base = `Respond to the candidate's latest turn only: "${text}".\n${boardContextForPrompt()}`;
-  const common = "Act like a Senior Staff Product Designer and hiring manager in a fast-moving whiteboard interview. Keep it short: one or two sentences. Be collaborative, conversational, direct, and neutral. Assess the candidate's thinking instead of directing the work. Do not tell them what to create next, which slice to choose, which user to pick, which flow to sketch, or which constraint to use. If this sounds like thinking aloud, stay silent or stop after the narrow answer.";
+function shouldKeepTranscription(text, event = {}) {
+  const normalized = text.toLowerCase().trim();
+  const words = getWords(normalized);
+  if (event.confidence != null && event.confidence < 0.55) return false;
+  if (event.language && !String(event.language).toLowerCase().startsWith("en")) return false;
+  if (words.length < 3 && !hasDirectQuestionIntent(normalized) && !shouldInterviewerRespondTo(normalized)) return false;
+  const asciiLetters = normalized.replace(/[^a-z]/g, "").length;
+  const allLetters = normalized.replace(/[^\p{L}]/gu, "").length;
+  if (allLetters && asciiLetters / allLetters < 0.7) return false;
+  const ambientSignals = ["api credit", "api credits", "billing", "invoice", "github push", "vercel logs"];
+  if (ambientSignals.some((phrase) => normalized.includes(phrase)) && !shouldInterviewerRespondTo(normalized)) return false;
+  return true;
+}
+
+function responseInstructionFor(text, options = {}) {
+  const phase = currentPhase();
+  const base = `Respond to the candidate's latest turn only: "${text}".\n${phasePromptContext()}`;
+  const common = "Speak like a real interviewer: brief, curious, never lecturing. One question or one comment, under 30 words. Do not explain the rubric. Never reveal hidden context unprompted. Reference the board only through the structured state.";
   const asksOpinion = /what do you think|do you think|does that make sense|am i on the right track|any feedback|give me feedback|do you have feedback|is that reasonable|is this reasonable|how does that sound/.test(text.toLowerCase());
   const soundsStuck = /i'?m stuck|i am stuck|i feel stuck|i'?m blocked|i am blocked|i don'?t know what to do|i'?m lost|i am lost|not sure where to go|not sure what to do/.test(text.toLowerCase());
   if (soundsStuck) {
-    return `${base} The candidate is stuck. Do not give the solution and do not choose the next artifact for them. Ask one neutral assessment question that makes them decide their own assumption, scope, evaluation criterion, or framework step. ${common}`;
+    return `${base} The candidate is stuck. Ask one neutral assessment question that makes them decide their own assumption, scope, or criterion. Do not solve. ${common}`;
   }
   if (asksOpinion) {
     return `${base} The candidate is asking for your opinion. Stay neutral: do not approve the solution, redesign it, or tell them what to do next. Reflect one observable tradeoff, framework gap, or stakeholder risk, then ask one evaluation question that returns ownership to them. ${common}`;
+  }
+  if (options.directQuestion || isQuestion(text.toLowerCase())) {
+    return `${base} The candidate directly asked a clarifying question. Answer it as the scenario's stakeholder. Use hidden context when relevant; otherwise invent one plausible simulated detail and commit to it for this session. Give the answer first, then one brief reason explaining the user, business, operational, or technical logic behind it. Do not refuse merely because the detail was not predefined. Do not present simulated details as real facts about an actual company. Keep this to two concise spoken sentences, then stop. Treat every prior interviewer answer in the transcript as binding so the scenario remains internally consistent.`;
+  }
+  if (phase.id === "clarify") {
+    return `${base} Phase rule: answer only the asked clarifying question using hidden context if directly relevant. Reveal at most one fact. Do not ask framing questions. ${common}`;
+  }
+  if (phase.id === "wrap") {
+    return `${base} Phase rule: help the candidate summarize, measure success, and state next steps. Do not inject new constraints. ${common}`;
   }
   if (state.difficulty === "easy") {
     return `${base} Easy mode: be friendly, structured, and patient. If they forgot the framework, explicitly prompt the next framework step without giving the answer. Agree with valid assumptions unless they conflict with the scenario. ${common}`;
@@ -794,18 +1429,44 @@ function responseInstructionFor(text) {
   return `${base} Medium mode: be professional, collaborative, and sharp. Expect the candidate to drive the framework without prompting. If they ask for feedback, challenge one assumption only when it lacks data or logic. ${common}`;
 }
 
+function clarificationResponseInstruction(question, seededAnswer) {
+  return `The candidate asked this clarifying question: "${question}".
+Answer as the scenario's stakeholder. Use this established scenario fact as the core answer: "${seededAnswer}"
+Give the answer first, then add one concise sentence explaining why it is true from a user, business, operational, or technical perspective. You may invent one plausible supporting detail when useful, but frame the entire exchange as simulated interview context—not a real claim about an actual company. Commit to the answer and keep it internally consistent in later turns. Do not ask a question back. Stop after two short spoken sentences.`;
+}
+
 function createRealtimeOpening() {
-  sendRealtimeEvent({
-    type: "response.create",
-    response: {
-      instructions: `Say exactly this opening line, then stop and listen without adding guidance: "${openingLine()}"`
-    }
-  });
+  state.skipNextInterviewerTranscript = true;
+  requestRealtimeResponse(`Read this challenge aloud exactly, then stop: "${openingLine()}"`, { force: true });
+}
+
+function phasePromptContext() {
+  const scenario = scenarios[state.scenarioIndex];
+  return `
+Session phase: ${currentPhase().label}. Difficulty: ${state.difficulty}. Time remaining: ${formatTime(Math.max(0, totalSessionMs() - state.elapsed))}.
+Challenge: ${scenario.prompt}
+Hidden context, reveal only if asked: ${(scenario.hiddenContext || []).map((fact) => `${fact.key}: ${fact.text}`).join(" | ")}
+Board state: ${boardContextForPrompt()}
+Running summary: ${state.runningSummary || "No durable summary yet."}
+Recent transcript window, last ~2 minutes only: ${recentTranscriptWindow() || "No recent transcript."}
+Rules for this phase: ${phaseRulesForPrompt(currentPhase().id)}
+`.trim();
+}
+
+function phaseRulesForPrompt(id) {
+  const rules = {
+    prompt: "Read or restate the challenge only. Volunteer nothing beyond the prompt text.",
+    clarify: "Answer clarifying questions directly. Use hidden context first; when it does not contain the answer, invent one plausible simulated stakeholder detail, briefly explain why, and keep it consistent for the session. Never ask framing questions instead of answering.",
+    framing: "Stay mostly silent. If truly needed, ask at most one guiding question after a long stall.",
+    explore: "Observe active work. Do not interrupt drawing or typing. Use at most one natural constraint injection if allowed by difficulty.",
+    wrap: "Become active around success metrics, summary, and what the candidate would do with more time. Never introduce new constraints."
+  };
+  return rules[id] || "Stay brief and candidate-led.";
 }
 
 function sendRealtimeText(text) {
   state.lastCandidateAt = Date.now();
-  state.transcript.push({ role: "candidate", text, at: state.elapsed });
+  recordTranscriptTurn("candidate", text);
   state.transcriptText = `${state.transcriptText} ${text}`.trim();
   logMessage("candidate", text);
   renderLiveTranscript();
@@ -817,13 +1478,18 @@ function sendRealtimeText(text) {
       content: [{ type: "input_text", text }]
     }
   });
-  if (shouldInterviewerRespondTo(text)) {
-    sendRealtimeEvent({
-      type: "response.create",
-      response: { instructions: responseInstructionFor(text) }
-    });
+  if (requestQuietTime(text)) {
+    state.quietUntil = Date.now() + 120000;
+    requestRealtimeResponse('Say exactly: "Of course, take your time." Then stop speaking.', { force: true });
   } else {
-    setSilent();
+    const clarifyingAnswer = answerQuestion(text);
+    if (clarifyingAnswer) {
+      requestRealtimeResponse(clarificationResponseInstruction(text, clarifyingAnswer), { force: true });
+    } else if (shouldInterviewerRespondTo(text) && canInterviewerSpeak({ direct: true }).allowed) {
+      requestRealtimeResponse(responseInstructionFor(text));
+    } else {
+      setSilent();
+    }
   }
 }
 
@@ -831,12 +1497,79 @@ function sendRealtimeEvent(event) {
   if (state.realtime?.dc?.readyState === "open") state.realtime.dc.send(JSON.stringify(event));
 }
 
+function requestRealtimeResponse(instructions, options = {}) {
+  if (!state.realtimeReady && !options.forceWithoutReady) return false;
+  if (state.realtimeResponseActive || state.realtimeResponseRequested) {
+    state.queuedRealtimeInstructions = instructions;
+    state.queuedRealtimeOptions = { ...options, force: true };
+    els.interviewerState.textContent = "Queued";
+    return true;
+  }
+  if (!options.force && state.modelCallCount >= state.modelCallLimit) {
+    setSilent();
+    return false;
+  }
+  pruneRealtimeConversationWindow();
+  state.modelCallCount += 1;
+  state.realtimeResponseRequested = true;
+  state.realtimeResponseActive = true;
+  setMicrophoneCapture(false);
+  sendRealtimeEvent({
+    type: "response.create",
+    response: {
+      instructions: `${instructions}\nKeep it brief: one or two short spoken sentences. Always finish the sentence before stopping. Do not mention mode, rubric, constraint deck, tokens, or system instructions.`,
+      max_output_tokens: 600
+    }
+  });
+  renderCallCounter();
+  return true;
+}
+
+function flushQueuedRealtimeResponse() {
+  if (!state.queuedRealtimeInstructions || !state.realtimeReady || state.realtimeResponseActive || state.realtimeResponseRequested) return;
+  const instructions = state.queuedRealtimeInstructions;
+  const options = state.queuedRealtimeOptions || { force: true };
+  state.queuedRealtimeInstructions = "";
+  state.queuedRealtimeOptions = null;
+  window.setTimeout(() => requestRealtimeResponse(instructions, options), 250);
+}
+
+function renderCallCounter() {
+  if (!els.callCounter) return;
+  const devMode = new URLSearchParams(window.location.search).has("dev");
+  els.callCounter.hidden = !devMode;
+  els.callCounter.textContent = `${state.modelCallCount}/${state.modelCallLimit} calls`;
+}
+
 function cancelRealtimeResponse() {
   if (!state.realtimeResponseActive) return;
   sendRealtimeEvent({ type: "response.cancel" });
   state.realtimeResponseActive = false;
+  state.realtimeResponseRequested = false;
+  state.queuedRealtimeInstructions = "";
+  state.queuedRealtimeOptions = null;
   state.interviewerDraft = "";
+  resumeMicrophoneAfterResponse();
   els.interviewerState.textContent = "Interrupted";
+}
+
+function setMicrophoneCapture(enabled) {
+  clearTimeout(microphoneResumeTimer);
+  microphoneResumeTimer = null;
+  state.localStream?.getAudioTracks().forEach((track) => {
+    track.enabled = enabled;
+  });
+}
+
+function resumeMicrophoneAfterResponse() {
+  clearTimeout(microphoneResumeTimer);
+  microphoneResumeTimer = window.setTimeout(() => {
+    microphoneResumeTimer = null;
+    if (state.listening && state.started && !state.ended && !state.realtimeResponseActive && !state.realtimeResponseRequested) {
+      setMicrophoneCapture(true);
+      setListeningState("listening", "Interviewer listening", "Think out loud, or press Ask interviewer for a direct response.");
+    }
+  }, 900);
 }
 
 function attachRemoteAudio(stream) {
@@ -848,7 +1581,7 @@ function attachRemoteAudio(stream) {
   document.body.appendChild(audio);
   state.remoteAudio = audio;
   audio.play().catch(() => {
-    useFallback("Audio playback was blocked. Click the mic or use text fallback.");
+    useFallback("Audio playback was blocked. Click the mic to retry. Your board is safe.");
   });
 }
 
@@ -873,10 +1606,10 @@ function setInterviewerDraft(text) {
     const body = document.createElement("span");
     body.className = "message-text";
     draft.append(label, body);
-    els.interviewerLog.insertBefore(draft, els.interviewerLog.firstChild);
+    els.interviewerLog.appendChild(draft);
   }
   draft.querySelector(".message-text").textContent = text;
-  els.interviewerLog.scrollTop = 0;
+  if (state.transcriptAutoScroll) els.interviewerLog.scrollTop = els.interviewerLog.scrollHeight;
 }
 
 function replaceInterviewerDraft(text) {
@@ -895,15 +1628,15 @@ function realtimeInstructions() {
 You are a Senior Staff Product Designer and Hiring Manager interviewing the candidate for a fast-moving, high-stakes product design role.
 Run a realistic collaborative Silicon Valley tech whiteboard challenge workshop, not a chat app.
 Your style is highly collaborative, conversational, direct, and sharp.
-Current difficulty: ${state.difficulty}.
+Session phase: ${currentPhase().label}. Current difficulty: ${state.difficulty}. Time remaining: ${formatTime(Math.max(0, totalSessionMs() - state.elapsed))}.
 The candidate is solving: ${scenario.prompt}
-Hidden scenario facts:
-- Object: ${scenario.truth.object}
-- User: ${scenario.truth.who}
-- Platform: ${scenario.truth.platform}
-- Goal: ${scenario.truth.goal}
-- Constraint: ${scenario.truth.constraint}
-- Curveball: ${scenario.truth.curveball}
+Hidden context. Reveal ONLY if asked a relevant clarifying question, one fact at a time:
+${(scenario.hiddenContext || []).map((fact) => `- ${fact.key}: ${fact.text}`).join("\n")}
+
+Constraint deck. Use only when difficulty and phase rules allow it:
+${(scenario.constraints || []).map((constraint) => `- ${constraint}`).join("\n")}
+
+${boardContextForPrompt()}
 
 Rules of engagement:
 - Do not solve the problem. Never give away the design solution. Your job is to push the candidate to discover it.
@@ -912,6 +1645,7 @@ Rules of engagement:
 - If the candidate skips a framework step, ask a sharp question that exposes the gap. Do not tell them what to draw.
 - Be a realistic stakeholder. Ask probing questions about entry points, AI uncertainty, user mistrust, technical feasibility, V1 scope, launch deadlines, business constraints, and evidence.
 - Once the candidate has a direction, interject with plot twists such as missing API capability, data science showing abandonment at a specific step, legal/privacy concerns, enterprise admin constraints, or a 3-week 0-to-1 launch deadline.
+- When introducing a new constraint or plot twist, state it in one concrete sentence so it can be pinned in the constraint ledger.
 
 Google interviewer DNA:
 - Scale over everything. Push for internationalization, low-bandwidth constraints, device range, and extreme scale. Example: ask how the UI scales from a high-end Pixel device to a low-end phone on spotty 3G.
@@ -923,15 +1657,20 @@ Behavior:
 - Listen while the candidate draws and thinks aloud.
 - You may receive a structured board context summary containing Excalidraw typed text and object types. Use it when relevant, but do not claim you can see more detail than that summary provides.
 - Keep replies short, spoken, and interview-like: one or two sentences.
+- Prefer a single short question. Do not exceed 35 words unless the candidate explicitly asks you to repeat or clarify something factual.
 - Speak at a measured interview pace with brief pauses between ideas so the candidate can follow.
 - The candidate leads. Your default behavior is silence.
 - Most question-shaped sentences are self-talk in a whiteboard interview. Do not respond to rhetorical questions, partial thoughts, repetition, typing narration, or "what if" exploration unless the candidate clearly addresses you or asks for interviewer signal.
-- If the candidate asks a clarifying question, answer only the needed part of the hidden facts.
+- If the candidate asks a clarifying question, answer it directly as the scenario's stakeholder. Use hidden facts when they apply. If no hidden fact answers it, invent one plausible simulated detail, decision, number, constraint, or user behavior that gives the candidate something concrete to design against.
+- Give the direct answer first and then one brief sentence of reasoning. The reasoning should explain the user need, business goal, operational reality, or technical tradeoff behind the answer—not reveal chain-of-thought.
+- Treat invented details as fictional interview context, never as verified facts about Google or another real company. Once stated, they are binding scenario facts: remain consistent with them in every later answer unless you explicitly introduce a realistic changed constraint.
+- Never evade a reasonable clarifying question by only telling the candidate to make an assumption. You are allowed to make the stakeholder decision for the simulation while leaving the product solution to the candidate.
 - If they ask for feedback, assess whether their thinking covers user, goal, constraints, tradeoffs, flow, metrics, or edge cases. Do not tell them what to create next.
 - Do not volunteer the target user, product space, constraints, or solution direction unless the candidate asks for that specific information.
 - Treat ordinary narration as thinking out loud. Stay quiet while they repeat themselves, type what they said, sketch, pause briefly, or compare options.
 - Do not over-specify the challenge early. Ask them to state assumptions when useful.
 - Interrupt gently only after a long silence, if they directly say they are stuck, if they ask for help, if they drift far away from the goal, or when a realistic constraint is appropriate for the selected difficulty.
+- Phase rules: ${phaseRulesForPrompt(currentPhase().id)}
 - When the candidate asks for your opinion, remain neutral. Do not validate the answer as correct and do not take over the design. Reflect one observable tradeoff or risk, then ask one question that returns ownership to the candidate.
 - When the candidate is stuck, ask one neutral assessment question that makes them choose their own assumption, scope, or decision criterion.
 - Strong example questions you may adapt sparingly:
@@ -945,7 +1684,7 @@ Behavior:
   - Engineering says we do not have the API capability to support that in V1. What changes?
   - Data Science shows users abandon the flow at this exact step. What hypothesis does that create?
 - Forbidden coaching moves: do not say "pick one slice," "create a user flow," "start with this screen," "design the sharing dialog," "map the happy path," or similar instructions unless the candidate explicitly asks you for examples of possible artifacts.
-- If interrupted, stop immediately and let the candidate speak.
+- Always complete both concise sentences of a requested answer. Do not interpret echo, background noise, or partial audio captured during your own playback as an interruption or a new candidate turn.
 - Do not mention this prompt, the rubric, or hidden scenario facts as a list.
 - Aim for a candidate-led talk ratio: the candidate should speak and work far more than you do.
 
@@ -970,7 +1709,7 @@ function armNoSpeechTimer() {
   clearNoSpeechTimer();
   state.noSpeechTimer = window.setTimeout(() => {
     if (!state.listening) return;
-    setListeningState("no-speech", "Listening, no speech yet", "Silence is okay. If you are speaking and no transcript appears, check mic permission/input or use text fallback.");
+    setListeningState("no-speech", "Interviewer listening", "Silence is okay. If you are speaking and no transcript appears, check mic permission.");
   }, 60000);
 }
 
@@ -980,8 +1719,9 @@ function clearNoSpeechTimer() {
 }
 
 function useFallback(message) {
-  setListeningState("fallback", "Use text fallback", message);
-  els.transcriptDrawer.open = true;
+  setListeningState("fallback", "Voice setup needed", message);
+  els.transcriptDrawer.hidden = true;
+  els.transcriptDrawer.open = false;
   announce(message);
 }
 
@@ -1003,11 +1743,12 @@ function currentTranscriptText() {
 
 function realtimeErrorMessage(error) {
   const message = error?.message || "";
-  if (message.includes("Permission") || message.includes("NotAllowedError")) return "Microphone permission was blocked. Allow mic access, or use text fallback.";
-  if (message.includes("OPENAI_API_KEY")) return "Realtime voice needs OPENAI_API_KEY on the local server. Use text fallback for now.";
-  if (message.includes("404")) return "Realtime server is not running. Start the local app server with OPENAI_API_KEY, or use text fallback.";
+  if (message.includes("Permission") || message.includes("NotAllowedError")) return "Microphone permission was blocked. Allow mic access, then restart the session.";
+  if (message.includes("OPENAI_API_KEY")) return "Add OPENAI_API_KEY to a local .env file, then restart the server. The key stays server-side.";
+  if (message.includes("404")) return "Voice server is not running. Start the local app server with OPENAI_API_KEY.";
   if (message.includes("Voice start cancelled")) return "Mic paused.";
-  return message || "Live voice could not start. Use text fallback.";
+  if (/cancel|no active response/i.test(message)) return "Mic paused.";
+  return "Voice unavailable — continuing without live voice. Your board is safe.";
 }
 
 function renderLiveTranscript() {
@@ -1022,38 +1763,91 @@ function answerQuestion(text) {
   const scenario = scenarios[state.scenarioIndex];
   const collaborationAnswer = answerCollaborationCheckIn(normalized);
   if (collaborationAnswer) return tone(collaborationAnswer);
+  const hidden = Object.fromEntries((scenario.hiddenContext || []).map((fact) => [fact.key, fact.text]));
+  if (isWhyFollowUp(normalized)) {
+    const followUp = answerWhyFollowUp(hidden, scenario);
+    if (followUp) return tone(followUp);
+  }
   const rules = [
     {
       key: "object",
       tests: ["what kind", "what type", "what is this", "what is the log", "log for", "wait for", "tip jar for", "lost", "what am i designing", "what is the space", "what space"],
-      answer: scenario.truth.object
+      answer: hidden.object || scenario.truth.object
     },
     {
       key: "who",
-      tests: ["who", "user", "persona", "customer", "patient", "caregiver", "audience", "for whom", "for who", "target"],
-      answer: scenario.truth.who
+      tests: ["who", "user", "persona", "customer", "patient", "caregiver", "audience", "for whom", "for who", "target", "staff", "data center staff", "data-center staff", "technician", "role", "what do they do"],
+      answer: hidden.who || scenario.truth.who
     },
     {
       key: "goal",
       tests: ["goal", "success", "metric", "trying to", "outcome", "why", "problem", "job", "need", "solve", "why are we designing"],
-      answer: scenario.truth.goal
+      answer: hidden.goal || scenario.truth.goal
     },
     {
       key: "platform",
       tests: ["platform", "mobile", "desktop", "device", "where", "channel", "app", "website", "screen"],
-      answer: scenario.truth.platform
+      answer: hidden.platform || scenario.truth.platform
     },
     {
       key: "constraint",
       tests: ["constraint", "limitation", "technical", "risk", "hard", "edge", "privacy", "accessibility", "must", "cannot"],
-      answer: scenario.truth.constraint
+      answer: hidden.constraint || scenario.truth.constraint
+    },
+    {
+      key: "success",
+      tests: ["measure", "metric", "success", "validate", "telemetry", "signal"],
+      answer: hidden.success || "Use a mix of user-task success, quality guardrails, and operational metrics."
     }
   ];
   const matches = rules.filter((rule) => rule.tests.some((test) => normalized.includes(test)));
-  if (matches.length === 0) return tone("I do not want to over-specify that yet. What assumption do you want to use?");
+  // Let the voice model role-play a stakeholder answer for clarifying questions
+  // that are not covered by the curated scenario facts.
+  if (matches.length === 0) return "";
   const uniqueMatches = matches.filter((rule, index) => matches.findIndex((item) => item.key === rule.key) === index);
-  uniqueMatches.slice(0, 2).forEach((rule) => state.revealed.add(rule.key));
-  return tone(uniqueMatches.slice(0, 2).map((rule) => rule.answer).join(" "));
+  uniqueMatches.slice(0, 1).forEach((rule) => state.revealed.add(rule.key));
+  uniqueMatches
+    .filter((rule) => rule.key === "constraint")
+    .forEach((rule) => addConstraint(rule.answer, "Clarified"));
+  const selectedRule = uniqueMatches[0];
+  const selectedAnswer = selectedRule.answer;
+  const repeated = state.lastClarificationKey === selectedRule.key && state.lastClarificationAnswer === selectedAnswer;
+  state.lastClarificationKey = selectedRule.key;
+  state.lastClarificationAnswer = selectedAnswer;
+  if (repeated) {
+    return tone(answerWhyFollowUp(hidden, scenario) || `Said differently: ${selectedAnswer}`);
+  }
+  return tone(selectedAnswer);
+}
+
+function isWhyFollowUp(text) {
+  return /^(why|but why|why though|why is that|why does that matter|why do they need that|why are we doing this)\??$/i.test(text.trim());
+}
+
+function answerWhyFollowUp(hidden, scenario) {
+  const key = state.lastClarificationKey;
+  if (!key) {
+    return hidden.goal || scenario.truth.goal;
+  }
+  if (key === "who") {
+    return `They matter because they are closest to the operational risk. The design needs to help them notice the issue, understand impact, and act before it spreads.`;
+  }
+  if (key === "object") {
+    return `Because the prompt is asking for a system response, not just a screen. The important part is how people detect, understand, and safely act on the problem.`;
+  }
+  if (key === "goal") {
+    return `Because the risk is not just missing information; it is delayed action under pressure. Your design should make the right next step clear without hiding uncertainty.`;
+  }
+  if (key === "platform") {
+    return `Because the context changes how people work: dense desktop views support investigation, while mobile or pager surfaces support urgent handoff and escalation.`;
+  }
+  if (key === "constraint") {
+    return `Because constraints are what make the whiteboard realistic. They force you to make tradeoffs instead of designing the ideal version in isolation.`;
+  }
+  if (key === "success") {
+    return `Because success needs evidence. The interview is looking for how you would know the design actually helped, not just whether it sounds useful.`;
+  }
+  return hidden.goal || scenario.truth.goal;
 }
 
 function answerCollaborationCheckIn(text) {
@@ -1115,97 +1909,199 @@ function interviewerReaction(text) {
 function tick() {
   state.elapsed += 1000;
   state.phaseElapsed += 1000;
-  const phases = phasePlans[state.mode];
-  const phase = phases[state.phaseIndex];
-  const timing = difficultyTiming();
+  const total = totalSessionMs();
+  const remaining = Math.max(0, total - state.elapsed);
 
-  if (state.phaseElapsed >= phase.ms && state.phaseIndex < phases.length - 1) {
-    state.phaseIndex += 1;
-    state.phaseElapsed = 0;
-    if (state.elapsed - state.lastInterjectionAt > timing.phaseNudgeMs) {
-      interject(`We are entering ${phases[state.phaseIndex].label}. What decision are you making at this point?`);
-    }
-  }
+  updateCanvasIdleState();
+  maybeAdvancePhase();
+  const phase = currentPhase();
 
-  const silentFor = Date.now() - state.lastCandidateAt;
-  if (state.started && silentFor > timing.silenceMs && state.elapsed - state.lastInterjectionAt > timing.cooldownMs) {
-    interject(state.difficulty === "easy" ? "What assumption are you working from right now?" : "If you are stuck, what assumption or criterion would help you decide?");
-  }
+  if (phase.id === "clarify") maybeClarifyNudge();
+  if (phase.id === "framing") maybeFramingGuidance();
+  if (phase.id === "explore") maybeConstraintInjection();
+  if (phase.id === "wrap") maybeWrapPrompts(remaining);
 
-  const curveballPhase = state.difficulty === "hard" ? 2 : state.difficulty === "medium" ? 2 : 3;
-  if (state.phaseIndex >= curveballPhase && !state.curveballUsed && state.elapsed - state.lastInterjectionAt > timing.curveballCooldownMs) {
-    state.curveballUsed = true;
-    interject(`${stakeholderPlotTwist()} ${scenarios[state.scenarioIndex].truth.curveball}`);
-  }
-
-  if (
-    state.started &&
-    state.strokes.length > 0 &&
-    !state.boardPrompted &&
-    Date.now() - state.lastBoardActivityAt > timing.boardNudgeMs &&
-    Date.now() - state.lastCandidateAt > timing.boardNudgeMs &&
-    state.elapsed - state.lastInterjectionAt > timing.cooldownMs
-  ) {
-    state.boardPrompted = true;
-    interject(state.difficulty === "easy" ? "What is the board helping you decide?" : "What tradeoff does the board make visible?");
-  }
-
-  if (state.elapsed >= phases.reduce((sum, item) => sum + item.ms, 0)) {
-    endSession();
+  if (remaining <= 0 && !state.timeCalled) {
+    state.timeCalled = true;
+    interject("That's time — thanks for walking me through this.", { force: true, timer: true });
+    window.setTimeout(() => {
+      if (state.started) endSession();
+    }, 1200);
   }
   render();
 }
 
-function difficultyTiming() {
-  if (state.difficulty === "easy") {
-    return { silenceMs: 120000, boardNudgeMs: 150000, cooldownMs: 180000, phaseNudgeMs: 240000, curveballCooldownMs: 300000 };
+function currentPhase() {
+  return phasePlans[state.mode][state.phaseIndex] || phasePlans[state.mode][0];
+}
+
+function totalSessionMs() {
+  return phasePlans[state.mode].reduce((sum, item) => sum + item.ms, 0);
+}
+
+function maybeAdvancePhase() {
+  const phases = phasePlans[state.mode];
+  const phase = phases[state.phaseIndex];
+  if (!phase || state.phaseElapsed < phase.ms || state.phaseIndex >= phases.length - 1) return;
+  if (state.phaseHistory[state.phaseHistory.length - 1]) state.phaseHistory[state.phaseHistory.length - 1].endedAt = state.elapsed;
+  state.phaseIndex += 1;
+  state.phaseElapsed = 0;
+  state.lastPhaseChangeAt = state.elapsed;
+  state.phaseHistory.push({ id: currentPhase().id, label: currentPhase().label, startedAt: state.elapsed, endedAt: null });
+  saveSessionSnapshot();
+}
+
+function finalizePhaseHistory() {
+  if (state.phaseHistory[state.phaseHistory.length - 1]) state.phaseHistory[state.phaseHistory.length - 1].endedAt = state.elapsed;
+}
+
+function canInterviewerSpeak(options = {}) {
+  if (!state.started || state.ended) return { allowed: false, reason: "ended" };
+  if (options.timer) return { allowed: true, reason: "timer" };
+  if (options.direct) return { allowed: true, reason: "direct" };
+  if (Date.now() < state.quietUntil) return { allowed: false, reason: "quiet" };
+  updateCanvasIdleState();
+  const silentEnough = Date.now() - state.lastCandidateAt >= 8000;
+  const canvasIdleEnough = Date.now() - state.lastCanvasActivityAt >= 8000 && !state.canvasActive && !state.typingActive;
+  if (state.canvasActive || state.typingActive || !canvasIdleEnough) return { allowed: false, reason: "observing" };
+  if (silentEnough && canvasIdleEnough) return { allowed: true, reason: "idle" };
+  return { allowed: false, reason: "listening" };
+}
+
+function updateCanvasIdleState() {
+  if (state.canvasActive && Date.now() - state.lastCanvasActivityAt > 1200) state.canvasActive = false;
+  if (state.typingActive && Date.now() - state.lastCanvasActivityAt > 1200) state.typingActive = false;
+}
+
+function maybeClarifyNudge() {
+  if (state.clarifyNudgeUsed) return;
+  if (!state.boardElements.length && !state.boardText) return;
+  if (state.revealed.size > 0 || state.transcript.some((turn) => turn.role === "candidate" && isQuestion(turn.text.toLowerCase()))) return;
+  if (interject("Before you dive in, is there anything you want to ask me about the problem?")) state.clarifyNudgeUsed = true;
+}
+
+function maybeFramingGuidance() {
+  if (state.boardPrompted) return;
+  if (Date.now() - state.lastCandidateAt < 60000 || Date.now() - state.lastCanvasActivityAt < 60000) return;
+  const question = state.difficulty === "easy" ? "Who is this for?" : "Who do you imagine the primary user is?";
+  if (interject(question)) state.boardPrompted = true;
+}
+
+function maybeConstraintInjection() {
+  if (state.difficulty === "easy") return;
+  const limit = state.difficulty === "hard" ? 2 : 1;
+  if (state.usedConstraintTexts.size >= limit) return;
+  if (state.difficulty === "medium" && !candidateIsCruising()) return;
+  const noFraming = currentPhase().id === "explore" && !frameworkStepHasEvidence("frame") && !frameworkStepHasEvidence("user");
+  if (noFraming) {
+    interject("Pause there: what user and goal are you optimizing around?");
+    return;
   }
-  if (state.difficulty === "hard") {
-    return { silenceMs: 210000, boardNudgeMs: 300000, cooldownMs: 300000, phaseNudgeMs: 360000, curveballCooldownMs: 420000 };
+  const assumptionConstraint = maybeInvalidateAssumption();
+  if (assumptionConstraint) {
+    if (interject(assumptionConstraint)) {
+      state.curveballUsed = true;
+      addConstraint(assumptionConstraint, "Interviewer");
+    }
+    return;
   }
-  return { silenceMs: 240000, boardNudgeMs: 240000, cooldownMs: 300000, phaseNudgeMs: 360000, curveballCooldownMs: 900000 };
+  const constraint = stakeholderPlotTwist();
+  if (!constraint) return;
+  if (interject(constraint)) {
+    state.curveballUsed = true;
+    state.usedConstraintTexts.add(constraint);
+    addConstraint(constraint, "Interviewer");
+  }
+}
+
+function maybeInvalidateAssumption() {
+  if (state.difficulty !== "hard") return "";
+  const assumption = state.assumptions.find((item) => !item.invalidated);
+  if (!assumption || state.usedConstraintTexts.has(`invalidate:${assumption.text}`)) return "";
+  assumption.invalidated = true;
+  state.usedConstraintTexts.add(`invalidate:${assumption.text}`);
+  renderConstraintLedger();
+  return `You assumed ${stripAssumptionPrefix(assumption.text)}. Now assume that is not true — how does your approach change?`;
+}
+
+function stripAssumptionPrefix(text) {
+  return String(text)
+    .replace(/^(i('| wi)?ll assume|i will assume|i am assuming|i'm assuming|let'?s assume|my assumption is|assuming that)\s*/i, "")
+    .trim();
+}
+
+function maybeWrapPrompts(remaining) {
+  if (!state.wrapMetricsPrompted && interject("How would you measure success?")) {
+    state.wrapMetricsPrompted = true;
+    return;
+  }
+  if (state.wrapMetricsPrompted && !state.wrapMoreTimePrompted && state.phaseElapsed > 90 * 1000 && interject("What would you do with more time?")) {
+    state.wrapMoreTimePrompted = true;
+    return;
+  }
+  if (!state.wrapSummaryPrompted && remaining <= 2 * 60 * 1000) {
+    if (interject("We have about two minutes — can you walk me through a summary?", { force: true, timer: true })) {
+      state.wrapSummaryPrompted = true;
+    }
+  }
+}
+
+function candidateIsCruising() {
+  return frameworkStepHasEvidence("frame") && frameworkStepHasEvidence("user") && (frameworkStepHasEvidence("flow") || state.boardElements.length >= 3);
 }
 
 function stakeholderPlotTwist() {
-  const twists = [
-    "Engineering says we do not have the API capability to support the full version in V1.",
-    "Data Science shows users abandon the flow at the highest-friction step.",
-    "3PS and privacy legal say we cannot store this user data locally.",
-    "Leadership says this needs a credible 3-week 0-to-1 version.",
-    "The design must work on a low-end Android device in a region with spotty 3G.",
-    "The LLM has a 12% hallucination rate on this task, and inference latency is peaking at 5 seconds.",
-    "Accessibility review flags that the current interaction is not usable with screen readers or keyboard navigation.",
-    "The feature must continue cleanly across Assistant, Android notifications, Gmail, Workspace, and Google Home."
-  ];
-  const index = Math.min(twists.length - 1, Math.floor(state.elapsed / 60000) % twists.length);
-  return twists[index];
+  const deck = scenarios[state.scenarioIndex].constraints || defaultConstraintDeck;
+  const next = deck.find((item) => !state.usedConstraintTexts.has(item));
+  return next || deck[0];
 }
 
-function interject(text) {
+function interject(text, options = {}) {
+  if (!options.force && !canInterviewerSpeak({ timer: options.timer }).allowed) return false;
   state.lastInterjectionAt = state.elapsed;
-  respond(tone(text), true);
+  respond(tone(text), true, { force: options.force });
+  return true;
 }
 
-function respond(text, isInterjection = false) {
-  state.transcript.push({ role: "interviewer", text, at: state.elapsed, isInterjection });
+function respond(text, isInterjection = false, options = {}) {
+  if (!text) return;
+  if (!options.force && !canInterviewerSpeak({ direct: true }).allowed) return;
+  if (!state.canvasActive && !state.typingActive && state.sceneElementsRaw?.length) captureSceneElements(state.sceneElementsRaw);
+  text = sanitizeInterviewerText(text);
+  recordTranscriptTurn("interviewer", text, { isInterjection });
+  if (isInterjection) maybePinConstraint(text);
   logMessage("interviewer", text);
-  els.interviewerState.textContent = isInterjection ? "Interjecting" : "Answering";
+  els.interviewerState.textContent = "Speaking";
   announce(`Interviewer: ${text}`);
+  const realtimeIsAvailable = state.listening || state.realtimeConnecting || state.realtimeReady || state.realtimeResponseActive || state.realtimeResponseRequested;
+  if (!realtimeIsAvailable) speakInterviewerText(text);
+}
+
+function speakInterviewerText(text) {
+  if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 0.92;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  utterance.onend = updateInterviewerState;
+  utterance.onerror = updateInterviewerState;
+  els.interviewerState.textContent = "Speaking";
+  window.speechSynthesis.speak(utterance);
+}
+
+function sanitizeInterviewerText(text) {
+  const mechanics = /\b(mode|constraint deck|rubric|token|system prompt|hidden context|phase rule)\b/i;
+  if (!mechanics.test(text)) return text;
+  return "Let’s keep this grounded in the problem. What assumption are you making right now?";
 }
 
 function setSilent() {
-  els.interviewerState.textContent = "Silent";
+  updateInterviewerState();
 }
 
 function openingLine() {
-  const prompt = scenarios[state.scenarioIndex].prompt;
-  if (state.difficulty === "easy") {
-    return `Easy mode. ${prompt} Let's start with the goal and constraints. What do you think success should mean here?`;
-  }
-  if (state.difficulty === "hard") {
-    return `Hard mode. ${prompt} I am not giving constraints yet. What are your initial thoughts?`;
-  }
-  return `Medium mode. ${prompt} What are your initial thoughts?`;
+  return scenarios[state.scenarioIndex].prompt;
 }
 
 function tone(text) {
@@ -1218,26 +2114,50 @@ function isQuestion(text) {
   return text.includes("?") || /^(who|what|when|where|why|how|is|are|do|does|should|can|could)\b/.test(text.trim());
 }
 
+function requestQuietTime(text) {
+  const normalized = text.toLowerCase();
+  return [
+    "give me a minute",
+    "give me two minutes",
+    "let me think",
+    "i need some time",
+    "i need a minute",
+    "i need two minutes",
+    "need some time to structure",
+    "time to structure",
+    "let me structure",
+    "give me a moment"
+  ].some((phrase) => normalized.includes(phrase));
+}
+
 function logMessage(role, text) {
   const div = document.createElement("div");
   div.className = `message ${role}`;
   const label = document.createElement("span");
   label.className = "message-role";
-  label.textContent = role === "candidate" ? "You" : role === "interviewer" ? "Interviewer" : "System";
+  label.textContent = `${role === "candidate" ? "You" : role === "interviewer" ? "Interviewer" : "System"} · ${formatTime(state.elapsed)}`;
   const body = document.createElement("span");
   body.className = "message-text";
   body.textContent = text;
   div.append(label, body);
-  els.interviewerLog.insertBefore(div, els.interviewerLog.firstChild);
-  els.interviewerLog.scrollTop = 0;
+  els.interviewerLog.appendChild(div);
+  if (state.transcriptAutoScroll) els.interviewerLog.scrollTop = els.interviewerLog.scrollHeight;
 }
 
 function showDebrief() {
+  els.scorecard.hidden = false;
+  els.scoreRows.innerHTML = `<div class="debrief-loading">Building debrief from transcript, board, and timing...</div>`;
+  els.nextNotes.innerHTML = "";
+  window.setTimeout(renderDebrief, 250);
+}
+
+function renderDebrief() {
   const scores = scoreSession();
   const average = Math.round(scores.reduce((sum, row) => sum + row.score, 0) / scores.length);
   const strengths = scores.filter((row) => scoreStatus(row.score).kind === "good").length;
   const focusAreas = scores.length - strengths;
-  els.overallScore.textContent = `${average}/5 average`;
+  const leaning = overallLeaning(average, scores);
+  els.overallScore.textContent = leaning.label;
   els.scoreRows.innerHTML = "";
   scores.forEach((row) => {
     const status = scoreStatus(row.score);
@@ -1251,6 +2171,7 @@ function showDebrief() {
           <span class="score-status">${status.label}</span>
         </div>
         <span>${row.note}</span>
+        <span class="score-evidence">Evidence: ${row.evidence}</span>
       </div>
       <output aria-label="${row.label} score">${row.score}/5</output>
     `;
@@ -1264,14 +2185,145 @@ function showDebrief() {
     <span><span class="summary-dot improve" aria-hidden="true"></span>${focusAreas} could improve</span>
   `;
   els.nextNotes.appendChild(summary);
-  nextTimeNotes(scores).forEach((note) => {
-    const div = document.createElement("div");
-    div.className = "note";
-    div.textContent = note;
-    els.nextNotes.appendChild(div);
-  });
+  [
+    `Overall leaning: ${leaning.label}. ${leaning.reason}`,
+    `Strongest moment: ${strongestMoment(scores)}`,
+    `This would have cost you the round: ${roundRisk(scores)}`,
+    "Practice signal, not a prediction."
+  ].forEach((note) => appendDebriefNote(note));
+  renderTimelineBar();
   els.scorecard.hidden = false;
   els.scorecard.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+function appendDebriefNote(note) {
+  const div = document.createElement("div");
+  div.className = "note";
+  div.textContent = note;
+  els.nextNotes.appendChild(div);
+}
+
+function addConstraint(text, source = "Constraint") {
+  const cleanText = truncateText(String(text || "").replace(/\s+/g, " ").trim(), 220);
+  if (!cleanText) return;
+  const duplicate = state.constraints.some((item) => item.text === cleanText);
+  if (duplicate) return;
+  state.constraints.unshift({ text: cleanText, source, at: state.elapsed });
+  renderConstraintLedger();
+}
+
+function saveSessionSnapshot() {
+  if (!state.started || state.ended) return;
+  const snapshot = {
+    version: 2,
+    savedAt: Date.now(),
+    scenarioIndex: state.scenarioIndex,
+    difficulty: state.difficulty,
+    companies: state.companies,
+    mode: state.mode,
+    started: state.started,
+    elapsed: state.elapsed,
+    phaseIndex: state.phaseIndex,
+    phaseElapsed: state.phaseElapsed,
+    phaseHistory: normalizedPhaseHistory(),
+    transcript: state.transcript,
+    runningSummary: state.runningSummary,
+    realtimeItems: state.realtimeItems,
+    revealed: [...state.revealed],
+    constraints: state.constraints,
+    assumptions: state.assumptions,
+    usedConstraintTexts: [...state.usedConstraintTexts],
+    boardElements: state.boardElements,
+    boardText: state.boardText,
+    boardSummary: state.boardSummary,
+    sceneElementsRaw: state.sceneElementsRaw
+  };
+  localStorage.setItem("whiteboard-sim-autosave", JSON.stringify(snapshot));
+}
+
+function clearSessionSnapshot() {
+  localStorage.removeItem("whiteboard-sim-autosave");
+}
+
+function offerResumeIfAvailable() {
+  const raw = localStorage.getItem("whiteboard-sim-autosave");
+  if (!raw) return;
+  let snapshot;
+  try {
+    snapshot = JSON.parse(raw);
+  } catch {
+    clearSessionSnapshot();
+    return;
+  }
+  if (!snapshot?.started) return;
+  const shouldResume = window.confirm("Resume your session?");
+  if (!shouldResume) {
+    clearSessionSnapshot();
+    return;
+  }
+  Object.assign(state, {
+    scenarioIndex: snapshot.scenarioIndex ?? state.scenarioIndex,
+    difficulty: snapshot.difficulty || state.difficulty,
+    companies: snapshot.companies || state.companies,
+    mode: snapshot.mode || state.mode,
+    started: true,
+    ended: false,
+    elapsed: snapshot.elapsed || 0,
+    phaseIndex: snapshot.phaseIndex || 0,
+    phaseElapsed: snapshot.phaseElapsed || 0,
+    phaseHistory: snapshot.phaseHistory || [],
+    transcript: snapshot.transcript || [],
+    runningSummary: snapshot.runningSummary || "",
+    realtimeItems: snapshot.realtimeItems || [],
+    revealed: new Set(snapshot.revealed || []),
+    constraints: snapshot.constraints || [],
+    assumptions: snapshot.assumptions || [],
+    usedConstraintTexts: new Set(snapshot.usedConstraintTexts || []),
+    boardElements: snapshot.boardElements || [],
+    boardText: snapshot.boardText || "",
+    boardSummary: snapshot.boardSummary || "",
+    sceneElementsRaw: snapshot.sceneElementsRaw || [],
+    lastCandidateAt: Date.now(),
+    lastCanvasActivityAt: Date.now()
+  });
+  window.__WHITEBOARD_RESTORE_SCENE__ = snapshot.sceneElementsRaw || [];
+  state.timer = setInterval(tick, 1000);
+  state.autosaveTimer = setInterval(saveSessionSnapshot, 10000);
+  window.requestAnimationFrame(() => {
+    els.interviewerLog.innerHTML = "";
+    state.transcript.forEach((turn) => logMessage(turn.role, turn.text));
+    render();
+    if (state.voiceAvailable) {
+      setListeningState("requesting", "Connecting interviewer", "The interviewer is rejoining and will listen while you work.");
+      startListening();
+    }
+  });
+}
+
+function maybePinConstraint(text) {
+  const normalized = String(text || "").toLowerCase();
+  const constraintSignals = [
+    "engineering says",
+    "data science shows",
+    "privacy",
+    "legal",
+    "cannot",
+    "can’t",
+    "can't",
+    "must",
+    "constraint",
+    "latency",
+    "low-end",
+    "3g",
+    "screen reader",
+    "keyboard",
+    "3 weeks",
+    "hallucination",
+    "api capability"
+  ];
+  if (constraintSignals.some((signal) => normalized.includes(signal))) {
+    addConstraint(text, normalized.includes("engineering") || normalized.includes("data science") ? "Plot twist" : "Constraint");
+  }
 }
 
 function scoreStatus(score) {
@@ -1285,20 +2337,65 @@ function scoreSession() {
   const candidateTurns = state.transcript.filter((turn) => turn.role === "candidate");
   const has = (terms) => terms.some((term) => text.includes(term));
   const score = (base, yes) => Math.max(1, Math.min(5, base + yes));
+  const evidence = (terms, fallback) => evidenceFor(terms) || fallback;
   return [
-    { label: "Problem framing & scoping", score: score(1, (state.revealed.has("who") ? 1 : 0) + (state.revealed.has("goal") ? 1 : 0) + (has(["scope", "problem", "success"]) ? 1 : 0)), note: "Clarified before designing." },
-    { label: "User empathy", score: score(1, (state.revealed.has("who") ? 2 : 0) + (has(["pain", "caregiver", "patient", "customer", "traveler", "anxiety"]) ? 1 : 0)), note: "Grounded decisions in a user." },
-    { label: "Structured thinking", score: score(1, (has(["first", "then", "flow", "journey"]) ? 2 : 0) + (candidateTurns.length >= 3 ? 1 : 0)), note: "Moved through the problem in an organized way." },
-    { label: "Breadth vs. depth", score: score(1, (has(["option", "alternative", "edge", "case"]) ? 1 : 0) + (has(["deep", "detail", "screen", "flow"]) ? 1 : 0) + (state.strokes.length > 2 ? 1 : 0)), note: "Explored, then chose where to go deeper." },
-    { label: "Interviewer collaboration", score: score(1, (state.revealed.size >= 2 ? 1 : 0) + (has(["what do you think", "does that make sense", "feedback", "right track"]) ? 1 : 0) + (state.transcript.some((turn) => turn.role === "interviewer" && !turn.isInterjection) ? 1 : 0)), note: "Used the interviewer as a partner instead of solving alone." },
-    { label: "Communication / narration", score: score(1, (words.length > 80 ? 1 : 0) + (has(["because", "tradeoff", "assume"]) ? 1 : 0) + (candidateTurns.length >= 4 ? 1 : 0)), note: "Made reasoning audible." },
-    { label: "Handling ambiguity & pushback", score: score(1, (state.curveballUsed ? 1 : 0) + (has(["change", "constraint", "risk", "adapt"]) ? 1 : 0)), note: "Responded to incomplete information and changes." },
-    { label: "Time management", score: score(2, state.phaseIndex >= 3 ? 1 : 0), note: "Kept moving across phases." }
+    { label: "Problem framing & clarifying questions", score: score(1, (state.revealed.has("who") ? 1 : 0) + (state.revealed.has("goal") ? 1 : 0) + (has(["scope", "problem", "success"]) ? 1 : 0)), note: "Clarified before designing.", evidence: evidence(["scope", "problem", "success", "who", "goal"], "No explicit framing evidence captured.") },
+    { label: "Users & context", score: score(1, (state.revealed.has("who") ? 2 : 0) + (has(["pain", "customer", "traveler", "admin", "technician", "persona"]) ? 1 : 0)), note: "Grounded choices in a user and context.", evidence: evidence(["user", "persona", "customer", "traveler", "admin", "technician", "pain"], "No explicit user evidence captured.") },
+    { label: "Structure before UI", score: score(1, (has(["first", "then", "flow", "journey"]) ? 2 : 0) + (candidateTurns.length >= 3 ? 1 : 0)), note: "Moved through the problem before jumping to screens.", evidence: evidence(["first", "then", "flow", "journey", "step"], "No explicit structure evidence captured.") },
+    { label: "Trade-offs & rationale", score: score(1, (has(["because", "tradeoff", "risk", "constraint", "alternative"]) ? 2 : 0) + (state.constraints.length ? 1 : 0)), note: "Explained why choices beat alternatives.", evidence: evidence(["because", "tradeoff", "risk", "constraint", "alternative"], "No explicit tradeoff evidence captured.") },
+    { label: "Communication & narration", score: score(1, (words.length > 80 ? 1 : 0) + (has(["assume", "because", "i'm thinking", "i am thinking"]) ? 1 : 0) + (candidateTurns.length >= 4 ? 1 : 0)), note: "Made reasoning audible while working.", evidence: candidateTurns[0] ? quoteEvidence(candidateTurns[0].text) : "No candidate narration captured." },
+    { label: "Time management & wrap-up", score: score(1, (state.wrapSummaryPrompted ? 1 : 0) + (state.phaseIndex >= 4 ? 1 : 0) + (has(["measure", "metric", "more time", "summary"]) ? 1 : 0)), note: "Reached summary, metrics, and next steps.", evidence: evidence(["measure", "metric", "more time", "summary"], "No wrap-up evidence captured.") }
   ];
 }
 
-function nextTimeNotes(scores) {
-  return scores.sort((a, b) => a.score - b.score).slice(0, 3).map((row) => `Next time: improve ${row.label.toLowerCase()} by making it explicit during the session.`);
+function evidenceFor(terms) {
+  const turn = state.transcript.find((item) => item.role === "candidate" && terms.some((term) => item.text.toLowerCase().includes(term)));
+  if (turn) return quoteEvidence(turn.text);
+  const board = state.boardElements.find((item) => item.text && terms.some((term) => item.text.toLowerCase().includes(term)));
+  if (board) return `Board note "${truncateText(board.text, 90)}"`;
+  return "";
+}
+
+function quoteEvidence(text) {
+  return `"${truncateText(String(text).replace(/\s+/g, " ").trim(), 110)}"`;
+}
+
+function strongestMoment(scores) {
+  const best = [...scores].sort((a, b) => b.score - a.score)[0];
+  return `${best.label} stood out. ${best.evidence}`;
+}
+
+function roundRisk(scores) {
+  const weakest = [...scores].sort((a, b) => a.score - b.score)[0];
+  return `${weakest.label} was the biggest risk. ${weakest.evidence}`;
+}
+
+function overallLeaning(average, scores) {
+  const minScore = Math.min(...scores.map((row) => row.score));
+  if (average >= 4 && minScore >= 3) return { label: "Hire", reason: "The session showed consistent signal across core dimensions." };
+  if (average >= 3) return { label: "Lean hire", reason: "There is useful signal, with a few gaps to tighten." };
+  if (average >= 2) return { label: "Lean no-hire", reason: "The session needs stronger framing, evidence, or wrap-up." };
+  return { label: "No hire", reason: "Too many core signals were missing from this practice run." };
+}
+
+function renderTimelineBar() {
+  const total = Math.max(1, state.elapsed);
+  const items = normalizedPhaseHistory();
+  const bar = document.createElement("div");
+  bar.className = "timeline-bar";
+  bar.innerHTML = items.map((item) => {
+    const pct = Math.round(((item.endedAt - item.startedAt) / total) * 100);
+    return `<span style="width:${pct}%;" title="${item.label}: ${pct}%"></span>`;
+  }).join("");
+  const labels = document.createElement("div");
+  labels.className = "timeline-labels";
+  labels.textContent = items.map((item) => `${item.label} ${Math.round(((item.endedAt - item.startedAt) / total) * 100)}%`).join(" · ");
+  els.nextNotes.append(bar, labels);
+}
+
+function normalizedPhaseHistory() {
+  const history = state.phaseHistory.length ? state.phaseHistory : [{ id: currentPhase().id, label: currentPhase().label, startedAt: 0, endedAt: state.elapsed }];
+  return history.map((item) => ({ ...item, endedAt: item.endedAt ?? state.elapsed }));
 }
 
 function setupBoard() {
@@ -1306,10 +2403,10 @@ function setupBoard() {
     window.whiteboardSession = {
       onChange(elements) {
         const liveElements = elements.filter((element) => !element.isDeleted);
-        state.boardElements = liveElements.map(boardElementFromExcalidraw).filter(Boolean);
-        state.boardText = state.boardElements.map((element) => element.text).filter(Boolean).join(" ");
-        state.boardSummary = summarizeBoardElements(state.boardElements);
-        state.strokes = state.boardElements;
+        state.sceneElementsRaw = liveElements;
+        markCanvasActivity("change");
+        scheduleSceneCapture(liveElements);
+        renderFrameworkTracker();
         if (liveElements.length > 0) {
           state.lastBoardActivityAt = Date.now();
           if (state.started) {
@@ -1327,6 +2424,11 @@ function setupBoard() {
         els.boardLoading.innerHTML = `<span class="material-symbols-rounded" aria-hidden="true">error</span><span>${message}</span>`;
       }
     };
+    els.excalidrawMount.addEventListener("pointerdown", () => markCanvasActivity("pointer"), true);
+    els.excalidrawMount.addEventListener("pointermove", () => markCanvasActivity("pointer"), true);
+    els.excalidrawMount.addEventListener("pointerup", () => { state.canvasActive = false; state.lastCanvasActivityAt = Date.now(); }, true);
+    els.excalidrawMount.addEventListener("keydown", () => markCanvasActivity("typing"), true);
+    els.excalidrawMount.addEventListener("input", () => markCanvasActivity("typing"), true);
     return;
   }
   resizeBoard();
@@ -1336,6 +2438,40 @@ function setupBoard() {
   els.board.addEventListener("pointerup", stopDraw);
   els.board.addEventListener("pointerleave", stopDraw);
   els.board.addEventListener("dblclick", editBoardText);
+}
+
+function markCanvasActivity(kind = "change") {
+  state.lastCanvasActivityAt = Date.now();
+  state.canvasActive = true;
+  state.typingActive = kind === "typing";
+  updateInterviewerState();
+}
+
+function scheduleSceneCapture(elements = state.sceneElementsRaw) {
+  clearSceneCaptureTimer();
+  state.sceneCaptureTimer = window.setTimeout(() => {
+    updateCanvasIdleState();
+    if (state.canvasActive || state.typingActive) {
+      scheduleSceneCapture(elements);
+      return;
+    }
+    captureSceneElements(elements);
+  }, 2000);
+}
+
+function clearSceneCaptureTimer() {
+  if (state.sceneCaptureTimer) window.clearTimeout(state.sceneCaptureTimer);
+  state.sceneCaptureTimer = null;
+}
+
+function captureSceneElements(elements = state.sceneElementsRaw) {
+  const structured = elements.map(boardElementFromExcalidraw).filter(Boolean);
+  state.boardElements = structured;
+  state.boardText = structured.map((element) => element.text).filter(Boolean).join(" ");
+  state.boardSummary = summarizeBoardElements(structured);
+  state.strokes = structured;
+  renderFrameworkTracker();
+  saveSessionSnapshot();
 }
 
 function boardElementFromExcalidraw(element) {
@@ -1348,7 +2484,10 @@ function boardElementFromExcalidraw(element) {
     x: Math.round(element.x || 0),
     y: Math.round(element.y || 0),
     width: Math.round(element.width || 0),
-    height: Math.round(element.height || 0)
+    height: Math.round(element.height || 0),
+    startBinding: element.startBinding?.elementId || "",
+    endBinding: element.endBinding?.elementId || "",
+    boundElements: (element.boundElements || []).map((item) => item.id).filter(Boolean)
   };
 }
 
@@ -1372,14 +2511,28 @@ function summarizeBoardElements(elements) {
     .slice(0, 12)
     .map((element) => `"${truncateText(element.text, 140)}"`)
     .join("; ");
-  return typedText ? `${countText}. Typed text: ${typedText}.` : `${countText}. No typed text captured yet.`;
+  const structure = elements
+    .filter((element) => element.type !== "text")
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .slice(0, 12)
+    .map((element) => `${element.type} at ${boardRegion(element)}`)
+    .join("; ");
+  const textSummary = typedText ? `Typed labels/notes: ${typedText}.` : "No typed labels captured yet.";
+  const structureSummary = structure ? `Visible structure: ${structure}.` : "No visible shapes captured yet.";
+  return `${countText}. ${textSummary} ${structureSummary}`;
 }
 
 function boardContextForPrompt() {
   if (!state.boardSummary) {
     return "Board context: no visible Excalidraw objects or typed text have been captured yet.";
   }
-  return `Board context from Excalidraw: ${state.boardSummary} Use this to understand the candidate's current framing, notes, and sketches. Do not read the board back verbatim unless the candidate asks.`;
+  return `Board context from Excalidraw: ${state.boardSummary} You can use typed labels, arrows, shapes, and rough positions to infer structure, but do not pretend to see semantic details that are not in this summary. Ask a clarifying question if the drawing intent is ambiguous.`;
+}
+
+function boardRegion(element) {
+  const x = element.x < -200 ? "far left" : element.x < 300 ? "left" : element.x < 900 ? "center" : "right";
+  const y = element.y < -100 ? "top" : element.y < 350 ? "upper" : element.y < 850 ? "middle" : "lower";
+  return `${y} ${x}`;
 }
 
 function truncateText(text, maxLength) {
@@ -1800,38 +2953,162 @@ function cssColor(name) {
   return theme.getPropertyValue(name).trim();
 }
 
+function renderFrameworkTracker() {
+  if (!els.frameworkTracker || !els.frameworkSteps) return;
+  els.frameworkTracker.hidden = true;
+  return;
+
+  els.frameworkModeLabel.textContent = state.difficulty === "easy" ? "Guided" : "Self-led";
+  const activeId = state.difficulty === "easy" ? currentFrameworkStepId() : "";
+  els.frameworkSteps.innerHTML = "";
+  frameworkSteps.forEach((step) => {
+    const complete = frameworkStepHasEvidence(step.id);
+    const active = activeId === step.id && state.started;
+    const li = document.createElement("li");
+    li.className = `${complete ? "complete" : ""} ${active ? "active" : ""}`.trim();
+    li.innerHTML = `
+      <span class="framework-dot" aria-hidden="true">${complete ? "check" : active ? "radio_button_checked" : "radio_button_unchecked"}</span>
+      <span>${step.label}</span>
+    `;
+    els.frameworkSteps.appendChild(li);
+  });
+}
+
+function currentFrameworkStepId() {
+  const phase = phasePlans[state.mode][state.phaseIndex]?.id;
+  const mapping = {
+    prompt: "frame",
+    clarify: "frame",
+    framing: frameworkStepHasEvidence("user") ? "flow" : "user",
+    explore: frameworkStepHasEvidence("wire") ? "system" : "wire",
+    wrap: "validate"
+  };
+  return mapping[phase] || "frame";
+}
+
+function frameworkStepHasEvidence(id) {
+  const text = `${state.transcript.map((turn) => turn.text).join(" ")} ${state.boardText}`.toLowerCase();
+  const has = (terms) => terms.some((term) => text.includes(term));
+  const shapeCount = state.boardElements.filter((element) => element.type !== "text").length;
+  const checks = {
+    frame: state.revealed.has("goal") || state.revealed.has("constraint") || has(["goal", "success", "constraint", "scope", "problem"]),
+    user: state.revealed.has("who") || has(["user", "persona", "customer", "traveler", "admin", "technician", "empathy", "pain"]),
+    flow: has(["flow", "journey", "path", "entry point", "step", "handoff", "recover", "onboarding"]),
+    system: has(["system", "architecture", "tradeoff", "risk", "api", "latency", "permission", "scale", "trust"]),
+    wire: shapeCount >= 2 || has(["wireframe", "screen", "sketch", "layout", "component", "dashboard"]),
+    validate: has(["metric", "measure", "telemetry", "a/b", "experiment", "validate", "guardrail"])
+  };
+  return Boolean(checks[id]);
+}
+
+function renderConstraintLedger() {
+  if (!els.constraintList || !els.constraintCount) return;
+  const total = state.constraints.length + state.assumptions.length;
+  if (els.constraintLedger) els.constraintLedger.hidden = total === 0;
+  els.constraintCount.textContent = `${total} pinned`;
+  els.constraintList.innerHTML = "";
+  if (!total) {
+    const empty = document.createElement("li");
+    empty.className = "empty";
+    empty.textContent = "Constraints and assumptions will appear here when they matter.";
+    els.constraintList.appendChild(empty);
+    return;
+  }
+  if (state.constraints.length) {
+    appendLedgerGroup("Interviewer constraints");
+  }
+  state.constraints.slice(0, 5).forEach((constraint) => {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <span class="constraint-source">${constraint.source}</span>
+      <span>${constraint.text}</span>
+    `;
+    els.constraintList.appendChild(li);
+  });
+  if (state.assumptions.length) {
+    appendLedgerGroup("Your assumptions");
+  }
+  state.assumptions.slice(0, 5).forEach((assumption) => {
+    const li = document.createElement("li");
+    li.className = assumption.invalidated ? "invalidated" : "";
+    li.innerHTML = `
+      <span class="constraint-source">${assumption.invalidated ? "Invalidated" : "Yours"}</span>
+      <span>${assumption.text}</span>
+    `;
+    els.constraintList.appendChild(li);
+  });
+}
+
+function appendLedgerGroup(label) {
+  const li = document.createElement("li");
+  li.className = "ledger-group";
+  li.textContent = label;
+  els.constraintList.appendChild(li);
+}
+
 function render() {
   const scenario = scenarios[state.scenarioIndex];
   const phases = phasePlans[state.mode];
   document.body.dataset.session = state.started ? "running" : state.ended ? "ended" : "idle";
+  document.body.dataset.phase = state.started ? currentPhase().id : "idle";
   els.promptTitle.textContent = scenario.prompt;
+  els.stickyPrompt.textContent = scenario.prompt;
   els.difficultySelect.value = state.difficulty;
+  renderCompanyPickerLabel();
   els.modeSelect.value = state.mode;
-  els.phaseName.textContent = state.started ? phases[state.phaseIndex].label : state.ended ? "Session ended" : "Not started";
-  els.phaseHint.textContent = state.started ? phaseHint(phases[state.phaseIndex].id) : state.ended ? "Debrief is ready. Start again when you want another run." : "Start when you are ready.";
-  els.sessionClock.textContent = formatTime(state.elapsed);
-  els.budgetLabel.textContent = `${state.transcript.filter((turn) => turn.isInterjection).length} interruptions`;
+  els.phaseName.textContent = state.started ? phases[state.phaseIndex].label : state.ended ? "Session complete" : "Not started";
+  els.phaseHint.textContent = state.started ? phaseHint(phases[state.phaseIndex].id) : state.ended ? `Ended at ${state.endedAtText || "session end"}. Challenge: ${scenario.prompt}` : "Start when you are ready.";
+  els.sessionClock.textContent = state.started ? formatTime(Math.max(0, totalSessionMs() - state.elapsed)) : formatTime(totalSessionMs());
+  els.budgetLabel.textContent = "";
   els.startSession.disabled = state.started;
   els.shuffleChallenge.disabled = state.started;
   els.startSession.textContent = state.started ? "In session" : state.ended ? "Start again" : "Start";
   els.endSession.disabled = !state.started;
   els.sendTurn.disabled = !state.started || state.ended;
+  els.askInterviewer.disabled = !state.started || state.ended || !state.voiceAvailable;
   els.voiceToggle.disabled = !state.started || state.ended || !state.voiceAvailable;
   els.voiceToggle.setAttribute("aria-pressed", String(state.listening || state.realtimeConnecting));
-  els.voiceToggle.setAttribute("aria-label", state.listening || state.realtimeConnecting ? "Pause listening" : "Resume listening");
-  if (!state.started && !state.ended && state.voiceAvailable) setListeningState("idle", "Not listening yet", "Start begins listening automatically.");
+  els.voiceToggle.setAttribute("aria-label", state.listening || state.realtimeConnecting ? "Interviewer is listening" : "Reconnect interviewer voice");
+  if (state.directQuestionUntil && state.directQuestionUntil <= Date.now()) state.directQuestionUntil = 0;
+  renderAskInterviewer();
+  renderFrameworkTracker();
+  renderConstraintLedger();
+  renderCallCounter();
+  updateInterviewerState();
+  if (!state.started && !state.ended && state.voiceAvailable) setListeningState("idle", "Ready", "Start connects the interviewer automatically.");
   if (state.ended) {
     els.interviewerState.textContent = "Ended";
-    setListeningState("ended", "Mic ended", "Session ended. The debrief is ready.");
   }
+}
+
+function updateInterviewerState() {
+  if (!state.started || state.ended) return;
+  updateCanvasIdleState();
+  if (Date.now() < state.quietUntil) {
+    els.interviewerState.textContent = "Quiet time — interviewer waiting";
+    return;
+  }
+  if (state.canvasActive || state.typingActive || Date.now() - state.lastCanvasActivityAt < 8000) {
+    els.interviewerState.textContent = "Observing your board";
+    return;
+  }
+  if (state.realtimeResponseActive) {
+    els.interviewerState.textContent = "Speaking";
+    return;
+  }
+  if (state.listening) {
+    els.interviewerState.textContent = "Listening";
+    return;
+  }
+  els.interviewerState.textContent = "Silent";
 }
 
 function phaseHint(id) {
   const hints = {
-    frame: "Clarify the challenge, user, pain points, context, constraints, and success criteria.",
-    explore: "Outline the user story, map the flow, generate directions, and check assumptions with the interviewer.",
-    deep: "Choose one direction, sketch the critical screens, and walk the interviewer through your reasoning.",
-    push: "Handle edge cases, invite pushback, and adapt to new constraints.",
+    prompt: "Listen to the challenge. The interviewer will not add extra context unless you ask.",
+    clarify: "Ask only the clarifying questions you need before committing to assumptions.",
+    framing: "State your understanding, user, problem, success criteria, and scope.",
+    explore: "Think out loud while you map, sketch, compare directions, and make tradeoffs.",
     wrap: "Summarize the decision, tradeoffs, success metrics, and what you would validate next."
   };
   return hints[id] || "Keep thinking out loud while you work.";
