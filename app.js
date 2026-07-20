@@ -438,6 +438,7 @@ const state = {
   lastInterjectionAt: 0,
   lastCandidateAt: 0,
   lastCandidateQuestionAt: 0,
+  directQuestionUntil: 0,
   clarifyNudgeUsed: false,
   wrapMetricsPrompted: false,
   wrapMoreTimePrompted: false,
@@ -498,6 +499,8 @@ const state = {
 
 const els = {
   promptTitle: document.querySelector("#promptTitle"),
+  stickyChallenge: document.querySelector("#stickyChallenge"),
+  stickyPrompt: document.querySelector("#stickyPrompt"),
   shuffleChallenge: document.querySelector("#shuffleChallenge"),
   difficultySelect: document.querySelector("#difficultySelect"),
   companyPicker: document.querySelector("#companyPicker"),
@@ -522,6 +525,8 @@ const els = {
   candidateInput: document.querySelector("#candidateInput"),
   sendTurn: document.querySelector("#sendTurn"),
   voiceToggle: document.querySelector("#voiceToggle"),
+  askInterviewer: document.querySelector("#askInterviewer"),
+  askInterviewerLabel: document.querySelector("#askInterviewerLabel"),
   voiceStatus: document.querySelector("#voiceStatus"),
   micHelp: document.querySelector("#micHelp"),
   listeningTitle: document.querySelector("#listeningTitle"),
@@ -548,6 +553,7 @@ const ctx = els.board?.getContext("2d");
 const theme = getComputedStyle(document.documentElement);
 const voiceOwnerKey = "whiteboard-sim-active-voice-tab";
 let voiceChannel = null;
+let microphoneResumeTimer = null;
 
 function init() {
   window.speechSynthesis?.cancel();
@@ -555,8 +561,21 @@ function init() {
   setupVoiceOwnership();
   offerResumeIfAvailable();
   bindEvents();
+  setupStickyChallenge();
   setupBoard();
   render();
+}
+
+function setupStickyChallenge() {
+  if (!els.stickyChallenge || !els.promptTitle) return;
+  if (!("IntersectionObserver" in window)) {
+    els.stickyChallenge.hidden = false;
+    return;
+  }
+  const observer = new IntersectionObserver(([entry]) => {
+    els.stickyChallenge.hidden = entry.isIntersecting;
+  }, { threshold: 0.05 });
+  observer.observe(els.promptTitle);
 }
 
 function bindEvents() {
@@ -579,6 +598,7 @@ function bindEvents() {
     event.preventDefault();
     if (state.started && !state.ended && !state.listening && !state.realtimeConnecting) startListening();
   });
+  els.askInterviewer.addEventListener("click", armDirectQuestion);
   els.undoBoard?.addEventListener("click", undoBoard);
   els.redoBoard?.addEventListener("click", redoBoard);
   els.zoomOut?.addEventListener("click", () => zoomBoard(0.88));
@@ -666,6 +686,7 @@ function resetSession() {
     lastInterjectionAt: 0,
     lastCandidateAt: 0,
     lastCandidateQuestionAt: 0,
+    directQuestionUntil: 0,
     clarifyNudgeUsed: false,
     wrapMetricsPrompted: false,
     wrapMoreTimePrompted: false,
@@ -846,6 +867,49 @@ function toggleVoice() {
   else startListening();
 }
 
+function armDirectQuestion() {
+  if (!state.started || state.ended) return;
+  const alreadyArmed = state.directQuestionUntil > Date.now();
+  state.directQuestionUntil = alreadyArmed ? 0 : Date.now() + 30000;
+  if (!alreadyArmed) {
+    announce("Ask interviewer armed. Your next spoken turn will receive an answer.");
+    setListeningState("listening", "Ask the interviewer", "Speak your question now. The next turn is directed to the interviewer.");
+  }
+  renderAskInterviewer();
+}
+
+function hasDirectQuestionIntent(text = "") {
+  if (state.directQuestionUntil > Date.now()) return true;
+  const normalized = String(text).toLowerCase();
+  return [
+    "interviewer",
+    "hey interviewer",
+    "question for you",
+    "i have a question",
+    "can you answer",
+    "could you answer",
+    "can you clarify",
+    "could you clarify",
+    "can you tell me",
+    "could you tell me"
+  ].some((phrase) => normalized.includes(phrase));
+}
+
+function consumeDirectQuestionIntent(text) {
+  const directed = hasDirectQuestionIntent(text);
+  if (directed) state.directQuestionUntil = 0;
+  renderAskInterviewer();
+  return directed;
+}
+
+function renderAskInterviewer() {
+  if (!els.askInterviewer) return;
+  const armed = state.directQuestionUntil > Date.now();
+  els.askInterviewer.classList.toggle("armed", armed);
+  els.askInterviewer.setAttribute("aria-pressed", String(armed));
+  els.askInterviewerLabel.textContent = armed ? "Ask now…" : "Ask interviewer";
+}
+
 function handlePushToTalkKeydown(event) {
   if (event.code !== "Space" || event.repeat || !state.started || state.ended) return;
   const target = event.target;
@@ -985,6 +1049,8 @@ function isActiveVoiceRun(runId) {
 }
 
 function disconnectRealtime() {
+  clearTimeout(microphoneResumeTimer);
+  microphoneResumeTimer = null;
   cancelRealtimeResponse();
   state.realtimeReady = false;
   state.realtimeConnecting = false;
@@ -1006,6 +1072,9 @@ function disconnectRealtime() {
 function handleRealtimeEvent(message) {
   const event = JSON.parse(message.data);
   if (event.type === "input_audio_buffer.speech_started") {
+    // Ignore echo/noise detected while the interviewer is answering. The mic
+    // is paused for responses, but a buffered VAD event can still arrive.
+    if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
     clearNoSpeechTimer();
     state.lastCandidateAt = Date.now();
     state.interimText = "Listening...";
@@ -1014,15 +1083,18 @@ function handleRealtimeEvent(message) {
     return;
   }
   if (event.type === "input_audio_buffer.speech_stopped") {
+    if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
     state.interimText = "";
     setListeningState("listening", "Interviewer listening", "I heard you. I will stay quiet unless you ask the interviewer directly.");
     renderLiveTranscript();
     return;
   }
   if (event.type === "conversation.item.input_audio_transcription.completed") {
+    if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
     const text = event.transcript?.trim();
     state.interimText = "";
     if (text && shouldKeepTranscription(text, event) && !state.loggedCandidateItems.has(event.item_id || text)) {
+      const directQuestion = consumeDirectQuestionIntent(text);
       state.loggedCandidateItems.add(event.item_id || text);
       state.transcriptText = `${state.transcriptText} ${text}`.trim();
       recordTranscriptTurn("candidate", text, { realtimeItemId: event.item_id || "" });
@@ -1035,10 +1107,10 @@ function handleRealtimeEvent(message) {
         const clarifyingAnswer = answerQuestion(text);
         if (clarifyingAnswer) {
           state.lastCandidateQuestionAt = Date.now();
-          requestRealtimeResponse(`Answer the candidate naturally and directly. Say this, with normal pacing: "${clarifyingAnswer}"`, { force: true });
-        } else if (shouldInterviewerRespondTo(text) && canInterviewerSpeak({ direct: true }).allowed) {
+          requestRealtimeResponse(clarificationResponseInstruction(text, clarifyingAnswer), { force: true });
+        } else if ((directQuestion || shouldInterviewerRespondTo(text)) && canInterviewerSpeak({ direct: true }).allowed) {
           state.lastCandidateQuestionAt = Date.now();
-          requestRealtimeResponse(responseInstructionFor(text));
+          requestRealtimeResponse(responseInstructionFor(text, { directQuestion }));
         } else {
           els.interviewerState.textContent = "Listening";
         }
@@ -1054,17 +1126,21 @@ function handleRealtimeEvent(message) {
   if (event.type === "response.created") {
     state.realtimeResponseActive = true;
     state.interviewerDraft = "";
+    setMicrophoneCapture(false);
     updateInterviewerState();
     return;
   }
   if (isRealtimeTextDelta(event)) {
     state.interviewerDraft += event.delta || "";
-    setInterviewerDraft(state.interviewerDraft);
+    // The opening challenge is already rendered synchronously in startSession().
+    // Keep collecting its audio transcript for bookkeeping, but do not render a
+    // second live draft card while the interviewer reads the same text aloud.
+    if (!state.skipNextInterviewerTranscript) setInterviewerDraft(state.interviewerDraft);
     return;
   }
   if (isRealtimeTextDone(event)) {
     state.interviewerDraft = event.transcript || event.text || event.output_text || state.interviewerDraft;
-    setInterviewerDraft(state.interviewerDraft);
+    if (!state.skipNextInterviewerTranscript) setInterviewerDraft(state.interviewerDraft);
     return;
   }
   if (event.type === "response.done") {
@@ -1085,6 +1161,7 @@ function handleRealtimeEvent(message) {
       }
     }
     state.interviewerDraft = "";
+    resumeMicrophoneAfterResponse();
     updateInterviewerState();
     flushQueuedRealtimeResponse();
     return;
@@ -1094,6 +1171,7 @@ function handleRealtimeEvent(message) {
     state.realtimeResponseActive = false;
     state.realtimeResponseRequested = false;
     state.interviewerDraft = "";
+    resumeMicrophoneAfterResponse();
     if (/cancel|no active response/i.test(message)) {
       setSilent();
       flushQueuedRealtimeResponse();
@@ -1312,7 +1390,7 @@ function shouldKeepTranscription(text, event = {}) {
   const words = getWords(normalized);
   if (event.confidence != null && event.confidence < 0.55) return false;
   if (event.language && !String(event.language).toLowerCase().startsWith("en")) return false;
-  if (words.length < 3 && !shouldInterviewerRespondTo(normalized)) return false;
+  if (words.length < 3 && !hasDirectQuestionIntent(normalized) && !shouldInterviewerRespondTo(normalized)) return false;
   const asciiLetters = normalized.replace(/[^a-z]/g, "").length;
   const allLetters = normalized.replace(/[^\p{L}]/gu, "").length;
   if (allLetters && asciiLetters / allLetters < 0.7) return false;
@@ -1321,7 +1399,7 @@ function shouldKeepTranscription(text, event = {}) {
   return true;
 }
 
-function responseInstructionFor(text) {
+function responseInstructionFor(text, options = {}) {
   const phase = currentPhase();
   const base = `Respond to the candidate's latest turn only: "${text}".\n${phasePromptContext()}`;
   const common = "Speak like a real interviewer: brief, curious, never lecturing. One question or one comment, under 30 words. Do not explain the rubric. Never reveal hidden context unprompted. Reference the board only through the structured state.";
@@ -1332,6 +1410,9 @@ function responseInstructionFor(text) {
   }
   if (asksOpinion) {
     return `${base} The candidate is asking for your opinion. Stay neutral: do not approve the solution, redesign it, or tell them what to do next. Reflect one observable tradeoff, framework gap, or stakeholder risk, then ask one evaluation question that returns ownership to them. ${common}`;
+  }
+  if (options.directQuestion || isQuestion(text.toLowerCase())) {
+    return `${base} The candidate directly asked a clarifying question. Answer it as the scenario's stakeholder. Use hidden context when relevant; otherwise invent one plausible simulated detail and commit to it for this session. Give the answer first, then one brief reason explaining the user, business, operational, or technical logic behind it. Do not refuse merely because the detail was not predefined. Do not present simulated details as real facts about an actual company. Keep this to two concise spoken sentences, then stop. Treat every prior interviewer answer in the transcript as binding so the scenario remains internally consistent.`;
   }
   if (phase.id === "clarify") {
     return `${base} Phase rule: answer only the asked clarifying question using hidden context if directly relevant. Reveal at most one fact. Do not ask framing questions. ${common}`;
@@ -1346,6 +1427,12 @@ function responseInstructionFor(text) {
     return `${base} Hard mode: be analytical, skeptical, time-conscious, and focused on system tradeoffs. Push weak assumptions, especially early assumptions, but do not solve. If giving pushback, make it about logic, evidence, scope, feasibility, or resilience under a severe pivot. ${common}`;
   }
   return `${base} Medium mode: be professional, collaborative, and sharp. Expect the candidate to drive the framework without prompting. If they ask for feedback, challenge one assumption only when it lacks data or logic. ${common}`;
+}
+
+function clarificationResponseInstruction(question, seededAnswer) {
+  return `The candidate asked this clarifying question: "${question}".
+Answer as the scenario's stakeholder. Use this established scenario fact as the core answer: "${seededAnswer}"
+Give the answer first, then add one concise sentence explaining why it is true from a user, business, operational, or technical perspective. You may invent one plausible supporting detail when useful, but frame the entire exchange as simulated interview context—not a real claim about an actual company. Commit to the answer and keep it internally consistent in later turns. Do not ask a question back. Stop after two short spoken sentences.`;
 }
 
 function createRealtimeOpening() {
@@ -1369,7 +1456,7 @@ Rules for this phase: ${phaseRulesForPrompt(currentPhase().id)}
 function phaseRulesForPrompt(id) {
   const rules = {
     prompt: "Read or restate the challenge only. Volunteer nothing beyond the prompt text.",
-    clarify: "Answer clarifying questions using hidden context. Never volunteer hidden context. Never ask framing questions.",
+    clarify: "Answer clarifying questions directly. Use hidden context first; when it does not contain the answer, invent one plausible simulated stakeholder detail, briefly explain why, and keep it consistent for the session. Never ask framing questions instead of answering.",
     framing: "Stay mostly silent. If truly needed, ask at most one guiding question after a long stall.",
     explore: "Observe active work. Do not interrupt drawing or typing. Use at most one natural constraint injection if allowed by difficulty.",
     wrap: "Become active around success metrics, summary, and what the candidate would do with more time. Never introduce new constraints."
@@ -1397,7 +1484,7 @@ function sendRealtimeText(text) {
   } else {
     const clarifyingAnswer = answerQuestion(text);
     if (clarifyingAnswer) {
-      requestRealtimeResponse(`Answer the candidate naturally and directly. Say this, with normal pacing: "${clarifyingAnswer}"`, { force: true });
+      requestRealtimeResponse(clarificationResponseInstruction(text, clarifyingAnswer), { force: true });
     } else if (shouldInterviewerRespondTo(text) && canInterviewerSpeak({ direct: true }).allowed) {
       requestRealtimeResponse(responseInstructionFor(text));
     } else {
@@ -1426,6 +1513,7 @@ function requestRealtimeResponse(instructions, options = {}) {
   state.modelCallCount += 1;
   state.realtimeResponseRequested = true;
   state.realtimeResponseActive = true;
+  setMicrophoneCapture(false);
   sendRealtimeEvent({
     type: "response.create",
     response: {
@@ -1461,7 +1549,27 @@ function cancelRealtimeResponse() {
   state.queuedRealtimeInstructions = "";
   state.queuedRealtimeOptions = null;
   state.interviewerDraft = "";
+  resumeMicrophoneAfterResponse();
   els.interviewerState.textContent = "Interrupted";
+}
+
+function setMicrophoneCapture(enabled) {
+  clearTimeout(microphoneResumeTimer);
+  microphoneResumeTimer = null;
+  state.localStream?.getAudioTracks().forEach((track) => {
+    track.enabled = enabled;
+  });
+}
+
+function resumeMicrophoneAfterResponse() {
+  clearTimeout(microphoneResumeTimer);
+  microphoneResumeTimer = window.setTimeout(() => {
+    microphoneResumeTimer = null;
+    if (state.listening && state.started && !state.ended && !state.realtimeResponseActive && !state.realtimeResponseRequested) {
+      setMicrophoneCapture(true);
+      setListeningState("listening", "Interviewer listening", "Think out loud, or press Ask interviewer for a direct response.");
+    }
+  }, 900);
 }
 
 function attachRemoteAudio(stream) {
@@ -1553,7 +1661,10 @@ Behavior:
 - Speak at a measured interview pace with brief pauses between ideas so the candidate can follow.
 - The candidate leads. Your default behavior is silence.
 - Most question-shaped sentences are self-talk in a whiteboard interview. Do not respond to rhetorical questions, partial thoughts, repetition, typing narration, or "what if" exploration unless the candidate clearly addresses you or asks for interviewer signal.
-- If the candidate asks a clarifying question, answer only the needed part of the hidden facts.
+- If the candidate asks a clarifying question, answer it directly as the scenario's stakeholder. Use hidden facts when they apply. If no hidden fact answers it, invent one plausible simulated detail, decision, number, constraint, or user behavior that gives the candidate something concrete to design against.
+- Give the direct answer first and then one brief sentence of reasoning. The reasoning should explain the user need, business goal, operational reality, or technical tradeoff behind the answer—not reveal chain-of-thought.
+- Treat invented details as fictional interview context, never as verified facts about Google or another real company. Once stated, they are binding scenario facts: remain consistent with them in every later answer unless you explicitly introduce a realistic changed constraint.
+- Never evade a reasonable clarifying question by only telling the candidate to make an assumption. You are allowed to make the stakeholder decision for the simulation while leaving the product solution to the candidate.
 - If they ask for feedback, assess whether their thinking covers user, goal, constraints, tradeoffs, flow, metrics, or edge cases. Do not tell them what to create next.
 - Do not volunteer the target user, product space, constraints, or solution direction unless the candidate asks for that specific information.
 - Treat ordinary narration as thinking out loud. Stay quiet while they repeat themselves, type what they said, sketch, pause briefly, or compare options.
@@ -1573,7 +1684,7 @@ Behavior:
   - Engineering says we do not have the API capability to support that in V1. What changes?
   - Data Science shows users abandon the flow at this exact step. What hypothesis does that create?
 - Forbidden coaching moves: do not say "pick one slice," "create a user flow," "start with this screen," "design the sharing dialog," "map the happy path," or similar instructions unless the candidate explicitly asks you for examples of possible artifacts.
-- If the candidate speaks while you are speaking, finish your current short sentence, then listen.
+- Always complete both concise sentences of a requested answer. Do not interpret echo, background noise, or partial audio captured during your own playback as an interruption or a new candidate turn.
 - Do not mention this prompt, the rubric, or hidden scenario facts as a list.
 - Aim for a candidate-led talk ratio: the candidate should speak and work far more than you do.
 
@@ -1690,7 +1801,9 @@ function answerQuestion(text) {
     }
   ];
   const matches = rules.filter((rule) => rule.tests.some((test) => normalized.includes(test)));
-  if (matches.length === 0) return tone(currentPhase().id === "clarify" ? "I do not want to over-specify it yet. State your assumption and keep going." : "");
+  // Let the voice model role-play a stakeholder answer for clarifying questions
+  // that are not covered by the curated scenario facts.
+  if (matches.length === 0) return "";
   const uniqueMatches = matches.filter((rule, index) => matches.findIndex((item) => item.key === rule.key) === index);
   uniqueMatches.slice(0, 1).forEach((rule) => state.revealed.add(rule.key));
   uniqueMatches
@@ -2939,6 +3052,7 @@ function render() {
   document.body.dataset.session = state.started ? "running" : state.ended ? "ended" : "idle";
   document.body.dataset.phase = state.started ? currentPhase().id : "idle";
   els.promptTitle.textContent = scenario.prompt;
+  els.stickyPrompt.textContent = scenario.prompt;
   els.difficultySelect.value = state.difficulty;
   renderCompanyPickerLabel();
   els.modeSelect.value = state.mode;
@@ -2951,9 +3065,12 @@ function render() {
   els.startSession.textContent = state.started ? "In session" : state.ended ? "Start again" : "Start";
   els.endSession.disabled = !state.started;
   els.sendTurn.disabled = !state.started || state.ended;
+  els.askInterviewer.disabled = !state.started || state.ended || !state.voiceAvailable;
   els.voiceToggle.disabled = !state.started || state.ended || !state.voiceAvailable;
   els.voiceToggle.setAttribute("aria-pressed", String(state.listening || state.realtimeConnecting));
   els.voiceToggle.setAttribute("aria-label", state.listening || state.realtimeConnecting ? "Interviewer is listening" : "Reconnect interviewer voice");
+  if (state.directQuestionUntil && state.directQuestionUntil <= Date.now()) state.directQuestionUntil = 0;
+  renderAskInterviewer();
   renderFrameworkTracker();
   renderConstraintLedger();
   renderCallCounter();

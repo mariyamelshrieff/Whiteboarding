@@ -15,8 +15,8 @@ if (!mount) {
       initialData: {
         elements: restoredElements,
         appState: {
-          viewBackgroundColor: "#fdfcff",
-          currentItemStrokeColor: "#1b1b1f",
+          viewBackgroundColor: "#fffefd",
+          currentItemStrokeColor: "#15110c",
           currentItemBackgroundColor: "transparent",
           currentItemFontFamily: 1,
           currentItemFontSize: 20,

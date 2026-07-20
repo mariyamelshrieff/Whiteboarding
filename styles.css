@@ -43,6 +43,294 @@
   --font-display: "Roboto Flex", Roboto, Arial, sans-serif;
 }
 
+/* Astryx-inspired application theme --------------------------------------- */
+:root {
+  --astryx-ink: #15110c;
+  --astryx-slate: #4e606f;
+  --astryx-muted: #73808a;
+  --astryx-line: #d9dee2;
+  --astryx-line-strong: #bac3ca;
+  --astryx-paper: #fffefd;
+  --astryx-wash: #f4f6f7;
+  --astryx-tint: #eaf3ff;
+  --astryx-blue: #1672ec;
+  --astryx-positive: #167a55;
+  --astryx-danger: #b3261e;
+  --astryx-radius: 16px;
+  --astryx-pill: 9999px;
+}
+
+html,
+body {
+  background: var(--astryx-wash) !important;
+  color: var(--astryx-ink) !important;
+  font-family: Figtree, system-ui, -apple-system, "Segoe UI", sans-serif !important;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(210, 231, 255, .65), transparent 31rem),
+    radial-gradient(circle at 92% 16%, rgba(240, 226, 255, .55), transparent 28rem);
+}
+
+.app {
+  position: relative;
+  max-width: 1680px !important;
+  margin: 0 auto !important;
+  padding: 16px 20px 24px !important;
+}
+
+.topbar,
+.statusbar,
+.listening-panel,
+.scorecard,
+.board-panel,
+.interview-panel,
+.framework-tracker,
+.constraint-ledger,
+.interviewer-card,
+.transcript-drawer {
+  border-color: var(--astryx-line) !important;
+  box-shadow: 0 1px 2px rgba(21, 17, 12, .04) !important;
+}
+
+.topbar {
+  background: rgba(255, 254, 253, .92) !important;
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--astryx-line) !important;
+  border-radius: 20px !important;
+  padding: 18px 20px !important;
+  margin-bottom: 12px !important;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 18px;
+  color: var(--astryx-slate);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+.brand-mark {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--astryx-ink);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.eyebrow {
+  color: var(--astryx-blue) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase;
+}
+
+#promptTitle {
+  max-width: 900px;
+  color: var(--astryx-ink) !important;
+  font-family: inherit !important;
+  font-size: clamp(25px, 2.3vw, 38px) !important;
+  font-weight: 500 !important;
+  letter-spacing: -.035em !important;
+  line-height: 1.08 !important;
+}
+
+.app-name,
+#phaseHint,
+.mic-help,
+#heardPreview,
+.score-evidence {
+  color: var(--astryx-slate) !important;
+}
+
+button,
+select,
+.company-picker summary {
+  min-height: 38px !important;
+  border: 1px solid var(--astryx-line-strong) !important;
+  border-radius: var(--astryx-pill) !important;
+  background: var(--astryx-paper) !important;
+  color: var(--astryx-ink) !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+button:hover:not(:disabled),
+.company-picker summary:hover,
+select:hover {
+  border-color: var(--astryx-ink) !important;
+  background: #fff !important;
+  transform: translateY(-1px);
+}
+
+button:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(22, 114, 236, .25) !important;
+  outline-offset: 2px !important;
+}
+
+#startSession,
+#sendTurn {
+  border-color: var(--astryx-ink) !important;
+  background: var(--astryx-ink) !important;
+  color: white !important;
+}
+
+#endSession:not(:disabled) {
+  border-color: rgba(179, 38, 30, .28) !important;
+  color: var(--astryx-danger) !important;
+}
+
+button:disabled {
+  opacity: .42 !important;
+}
+
+.company-menu {
+  border: 1px solid var(--astryx-line) !important;
+  border-radius: var(--astryx-radius) !important;
+  background: var(--astryx-paper) !important;
+  box-shadow: 0 14px 40px rgba(21, 17, 12, .12) !important;
+}
+
+.company-menu label {
+  border-radius: 10px !important;
+}
+
+.company-menu label:hover {
+  background: var(--astryx-wash) !important;
+}
+
+.statusbar,
+.listening-panel {
+  background: rgba(255, 254, 253, .88) !important;
+  border: 1px solid var(--astryx-line) !important;
+}
+
+.statusbar {
+  border-radius: 16px !important;
+}
+
+.listening-panel {
+  border-radius: 16px !important;
+  margin-top: 10px !important;
+}
+
+.phase-chip,
+.time-chip,
+.interviewer-chip {
+  border-color: var(--astryx-line) !important;
+  border-radius: var(--astryx-pill) !important;
+  background: var(--astryx-wash) !important;
+  color: var(--astryx-slate) !important;
+}
+
+.workspace {
+  gap: 12px !important;
+  margin-top: 12px !important;
+}
+
+.board-panel,
+.interview-panel {
+  overflow: hidden;
+  border: 1px solid var(--astryx-line) !important;
+  border-radius: 20px !important;
+  background: var(--astryx-paper) !important;
+}
+
+.board-loading {
+  color: var(--astryx-slate) !important;
+  background: var(--astryx-paper) !important;
+}
+
+.interview-panel {
+  padding: 10px !important;
+  background: rgba(255, 254, 253, .9) !important;
+}
+
+.interviewer-card,
+.framework-tracker,
+.constraint-ledger,
+.transcript-drawer,
+.scorecard {
+  border-radius: var(--astryx-radius) !important;
+  background: var(--astryx-paper) !important;
+}
+
+.side-section-header,
+.speaker-row {
+  color: var(--astryx-ink) !important;
+  font-weight: 600 !important;
+}
+
+.framework-steps li.active {
+  background: var(--astryx-tint) !important;
+  color: var(--astryx-ink) !important;
+}
+
+.framework-steps li.complete .framework-dot,
+.score-good .score-dot {
+  color: var(--astryx-positive) !important;
+}
+
+.constraint-source,
+.score-status,
+#frameworkModeLabel,
+#constraintCount {
+  border-radius: var(--astryx-pill) !important;
+}
+
+.interviewer-log {
+  scrollbar-color: var(--astryx-line-strong) transparent;
+}
+
+.interviewer-message,
+.candidate-message,
+.log-entry {
+  border-radius: 14px !important;
+}
+
+textarea {
+  border: 1px solid var(--astryx-line-strong) !important;
+  border-radius: 14px !important;
+  background: white !important;
+  color: var(--astryx-ink) !important;
+  font-family: inherit !important;
+}
+
+.scorecard {
+  border: 1px solid var(--astryx-line) !important;
+}
+
+.score-row {
+  border-color: var(--astryx-line) !important;
+  background: var(--astryx-wash) !important;
+}
+
+@media (max-width: 860px) {
+  .app { padding: 10px !important; }
+  .topbar { border-radius: 16px !important; }
+  .brand-lockup { margin-bottom: 12px; }
+  .session-controls { gap: 6px !important; }
+  .workspace { gap: 10px !important; }
+}
+
 * {
   box-sizing: border-box;
 }
