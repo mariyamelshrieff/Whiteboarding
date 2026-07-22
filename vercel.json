@@ -14,6 +14,10 @@
       "use": "@vercel/static"
     },
     {
+      "src": "astryx-theme.css",
+      "use": "@vercel/static"
+    },
+    {
       "src": "app.js",
       "use": "@vercel/static"
     },
@@ -39,8 +43,15 @@
       }
     },
     {
-      "src": "/(.+)",
+      "src": "/(index\\.html|styles\\.css|astryx-theme\\.css|app\\.js|excalidraw-board\\.js|start-app\\.command|README\\.md|favicon\\.ico)",
       "dest": "/$1",
+      "headers": {
+        "Permissions-Policy": "microphone=(self)"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html",
       "headers": {
         "Permissions-Policy": "microphone=(self)"
       }
