@@ -12,7 +12,17 @@ test("a failed response.create send cannot leave the interviewer stuck active", 
 test("clarifying responses recover from empty or timed-out model output", () => {
   assert.match(source, /else if \(!wasOpeningResponse && responseMeta\?\.fallbackText\) \{[\s\S]*?deliverRealtimeResponseFallback/);
   assert.match(source, /setTimeout\(\(\) => \{[\s\S]*?deliverRealtimeResponseFallback\(meta\.fallbackText/);
-  assert.match(source, /\}, 15000\);/);
+  assert.match(source, /\}, 30000\);/);
+});
+
+test("response progress refreshes the inactivity watchdog instead of cutting off speech", () => {
+  assert.match(source, /if \(isRealtimeTextDelta\(event\)\) \{[\s\S]*?armRealtimeResponseWatchdog\(state\.realtimeResponseMeta\)/);
+  assert.match(source, /if \(isRealtimeTextDone\(event\)\) \{[\s\S]*?armRealtimeResponseWatchdog\(state\.realtimeResponseMeta\)/);
+});
+
+test("short repeat requests replay the previous interviewer answer", () => {
+  assert.match(source, /words\.length < 3 && !isRepeatRequest\(normalized\)/);
+  assert.match(source, /if \(isRepeatRequest\(text\)\) \{[\s\S]*?lastInterviewerTurnText\(\)[\s\S]*?Repeat this previous interviewer response verbatim/);
 });
 
 test("a transcript-less opening cannot swallow the next interviewer answer", () => {

@@ -1543,6 +1543,9 @@ function handleRealtimeEvent(message) {
   }
   if (isRealtimeTextDelta(event)) {
     state.interviewerDraft += event.delta || "";
+    // Response progress keeps the inactivity watchdog alive. A healthy longer
+    // sentence must not be treated as a stalled model response.
+    armRealtimeResponseWatchdog(state.realtimeResponseMeta);
     // The opening challenge is already rendered synchronously in startSession().
     // Keep collecting its audio transcript for bookkeeping, but do not render a
     // second live draft card while the interviewer reads the same text aloud.
@@ -1551,6 +1554,7 @@ function handleRealtimeEvent(message) {
   }
   if (isRealtimeTextDone(event)) {
     state.interviewerDraft = event.transcript || event.text || event.output_text || state.interviewerDraft;
+    armRealtimeResponseWatchdog(state.realtimeResponseMeta);
     if (!state.skipNextInterviewerTranscript) setInterviewerDraft(state.interviewerDraft);
     return;
   }
@@ -1870,6 +1874,20 @@ function shouldInterviewerRespondTo(text) {
 }
 
 function routeCandidateTurn(text, options = {}) {
+  if (isRepeatRequest(text)) {
+    const previousAnswer = lastInterviewerTurnText();
+    if (!previousAnswer) {
+      const unavailable = "I don't have a previous answer to repeat yet.";
+      if (options.local) respond(unavailable, false, { force: true, localVoice: true });
+      else if (!requestRealtimeResponse(`Say exactly: "${unavailable}"`, { force: true, fallbackText: unavailable })) respond(unavailable, false, { force: true, localVoice: true });
+      return;
+    }
+    const repeatInstruction = `Repeat this previous interviewer response verbatim, at a measured pace, and finish every sentence: ${JSON.stringify(previousAnswer)}`;
+    if (options.local) respond(previousAnswer, false, { force: true, localVoice: true });
+    else if (!requestRealtimeResponse(repeatInstruction, { force: true, fallbackText: previousAnswer })) respond(previousAnswer, false, { force: true, localVoice: true });
+    return;
+  }
+
   if (requestQuietTime(text)) {
     state.quietUntil = Date.now() + 120000;
     if (options.local) respond("Of course, take your time.", false, { force: true });
@@ -1952,13 +1970,26 @@ function shouldKeepTranscription(text, event = {}) {
   if (nonSpeechOnly.test(normalized)) return false;
   if (event.confidence != null && event.confidence < 0.55) return false;
   if (event.language && !String(event.language).toLowerCase().startsWith("en")) return false;
-  if (words.length < 3 && !hasDirectQuestionIntent(normalized) && !shouldInterviewerRespondTo(normalized)) return false;
+  if (words.length < 3 && !isRepeatRequest(normalized) && !hasDirectQuestionIntent(normalized) && !shouldInterviewerRespondTo(normalized)) return false;
   const asciiLetters = normalized.replace(/[^a-z]/g, "").length;
   const allLetters = normalized.replace(/[^\p{L}]/gu, "").length;
   if (allLetters && asciiLetters / allLetters < 0.7) return false;
   const ambientSignals = ["api credit", "api credits", "billing", "invoice", "github push", "vercel logs"];
   if (ambientSignals.some((phrase) => normalized.includes(phrase)) && !shouldInterviewerRespondTo(normalized)) return false;
   return true;
+}
+
+function isRepeatRequest(text) {
+  const normalized = String(text || "").toLowerCase().replace(/[^a-z\s']/g, " ").replace(/\s+/g, " ").trim();
+  return /^(?:(?:hey|hi|sorry|please)\s+)*(?:(?:can|could|would|will)\s+you\s+)?(?:please\s+)?(?:repeat(?:\s+(?:that|it|yourself|the last (?:answer|sentence)))?|say (?:that|it) again|what did you say)(?:\s+please)?$/.test(normalized);
+}
+
+function lastInterviewerTurnText() {
+  for (let index = state.transcript.length - 1; index >= 0; index -= 1) {
+    const turn = state.transcript[index];
+    if (turn.role === "interviewer" && String(turn.text || "").trim()) return String(turn.text).trim();
+  }
+  return "";
 }
 
 function responseInstructionFor(text, options = {}) {
@@ -2263,7 +2294,7 @@ function armRealtimeResponseWatchdog(meta) {
     }
     resumeMicrophoneAfterResponse();
     flushQueuedRealtimeResponse();
-  }, 15000);
+  }, 30000);
 }
 
 function clearRealtimeResponseWatchdog() {
