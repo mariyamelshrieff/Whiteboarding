@@ -209,16 +209,18 @@ const phasePlans = {
   express: [
     { id: "prompt", label: "Prompt", ms: 1 * 60 * 1000 },
     { id: "clarify", label: "Clarify", ms: 3 * 60 * 1000 },
-    { id: "framing", label: "Framing", ms: 4 * 60 * 1000 },
-    { id: "explore", label: "Explore / deep dive", ms: 8 * 60 * 1000 },
-    { id: "wrap", label: "Wrap-up", ms: 4 * 60 * 1000 }
+    { id: "framing", label: "Framing", ms: 3 * 60 * 1000 },
+    { id: "flow", label: "Flow", ms: 5 * 60 * 1000 },
+    { id: "sketch", label: "Sketch", ms: 5 * 60 * 1000 },
+    { id: "summary", label: "Summary", ms: 3 * 60 * 1000 }
   ],
   full: [
-    { id: "prompt", label: "Prompt", ms: 2 * 60 * 1000 },
-    { id: "clarify", label: "Clarify", ms: 6 * 60 * 1000 },
-    { id: "framing", label: "Framing", ms: 7 * 60 * 1000 },
-    { id: "explore", label: "Explore / deep dive", ms: 20 * 60 * 1000 },
-    { id: "wrap", label: "Wrap-up", ms: 10 * 60 * 1000 }
+    { id: "prompt", label: "Prompt", ms: 1 * 60 * 1000 },
+    { id: "clarify", label: "Clarify", ms: 4 * 60 * 1000 },
+    { id: "framing", label: "Framing", ms: 5 * 60 * 1000 },
+    { id: "flow", label: "Flow", ms: 7 * 60 * 1000 },
+    { id: "sketch", label: "Sketch", ms: 8 * 60 * 1000 },
+    { id: "summary", label: "Summary", ms: 5 * 60 * 1000 }
   ]
 };
 
@@ -432,6 +434,8 @@ const state = {
   phaseIndex: 0,
   phaseElapsed: 0,
   phaseHistory: [],
+  openingComplete: false,
+  answeredQuestionKeys: new Set(),
   lastPhaseChangeAt: 0,
   endedAtText: "",
   elapsed: 0,
@@ -451,13 +455,20 @@ const state = {
   sceneCaptureTimer: null,
   autosaveTimer: null,
   transcriptAutoScroll: true,
+  capturePending: false,
+  captureQuestionArmed: false,
+  captureTimeout: null,
   modelCallCount: 0,
   modelCallLimit: 12,
   pendingOpening: false,
+  openingResponsePending: false,
   skipNextInterviewerTranscript: false,
   tabId: globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   queuedRealtimeInstructions: "",
   queuedRealtimeOptions: null,
+  realtimeResponseWatchdog: null,
+  realtimeResponseMeta: null,
+  realtimeRequestSequence: 0,
   lastClarificationKey: "",
   lastClarificationAnswer: "",
   timer: null,
@@ -474,6 +485,7 @@ const state = {
   sceneElementsRaw: [],
   boardText: "",
   boardSummary: "",
+  boardAnalysis: null,
   lastSentSceneSignature: "",
   lastBoardActivityAt: 0,
   boardPrompted: false,
@@ -487,6 +499,8 @@ const state = {
   localStream: null,
   remoteStream: null,
   remoteAudio: null,
+  interviewerMuted: false,
+  interviewerActivity: "Silent",
   listening: false,
   voiceAvailable: false,
   noSpeechTimer: null,
@@ -494,21 +508,38 @@ const state = {
   interimText: "",
   interviewerDraft: "",
   loggedCandidateItems: new Set(),
-  guidanceCount: 0
+  guidanceCount: 0,
+  exportCanvasPng: null,
+  clearBoardScene: null,
+  evaluating: false,
+  shownNudges: new Set(),
+  activeNudge: "",
+  canvasCheckpoints: [],
+  lastCheckpointAt: -20000,
+  insertBoardTemplate: null,
+  setBoardTheme: null,
+  runCanvasHitTest: null
 };
 
 const els = {
   promptTitle: document.querySelector("#promptTitle"),
+  challengeToggle: document.querySelector("#challengeToggle"),
+  challengePopover: document.querySelector("#challengePopover"),
+  challengePopoverText: document.querySelector("#challengePopoverText"),
   stickyChallenge: document.querySelector("#stickyChallenge"),
   stickyPrompt: document.querySelector("#stickyPrompt"),
   shuffleChallenge: document.querySelector("#shuffleChallenge"),
   difficultySelect: document.querySelector("#difficultySelect"),
   companyPicker: document.querySelector("#companyPicker"),
   companyPickerLabel: document.querySelector("#companyPickerLabel"),
-  companyCheckboxes: document.querySelectorAll("input[name='company']"),
+  companySelect: document.querySelector("#companySelect"),
   modeSelect: document.querySelector("#modeSelect"),
   startSession: document.querySelector("#startSession"),
+  capsuleStart: document.querySelector("#capsuleStart"),
+  capsuleStartLabel: document.querySelector("#capsuleStartLabel"),
   endSession: document.querySelector("#endSession"),
+  drawerToggle: document.querySelector("#drawerToggle"),
+  themeToggle: document.querySelector("#themeToggle"),
   phaseName: document.querySelector("#phaseName"),
   phaseHint: document.querySelector("#phaseHint"),
   frameworkTracker: document.querySelector("#frameworkTracker"),
@@ -518,12 +549,17 @@ const els = {
   constraintCount: document.querySelector("#constraintCount"),
   constraintList: document.querySelector("#constraintList"),
   sessionClock: document.querySelector("#sessionClock"),
+  topbarClock: document.querySelector("#topbarClock"),
   callCounter: document.querySelector("#callCounter"),
   interviewerState: document.querySelector("#interviewerState"),
   budgetLabel: document.querySelector("#budgetLabel"),
   interviewerLog: document.querySelector("#interviewerLog"),
+  jumpToLatest: document.querySelector("#jumpToLatest"),
+  transcriptEmpty: document.querySelector("#transcriptEmpty"),
+  typedReasoning: document.querySelector("#typedReasoning"),
   candidateInput: document.querySelector("#candidateInput"),
   sendTurn: document.querySelector("#sendTurn"),
+  candidateSubmitStatus: document.querySelector("#candidateSubmitStatus"),
   voiceToggle: document.querySelector("#voiceToggle"),
   askInterviewer: document.querySelector("#askInterviewer"),
   askInterviewerLabel: document.querySelector("#askInterviewerLabel"),
@@ -531,12 +567,30 @@ const els = {
   micHelp: document.querySelector("#micHelp"),
   listeningTitle: document.querySelector("#listeningTitle"),
   heardPreview: document.querySelector("#heardPreview"),
-  transcriptDrawer: document.querySelector("#transcriptDrawer"),
   liveTranscript: document.querySelector("#liveTranscript"),
   scorecard: document.querySelector("#scorecard"),
+  closeReport: document.querySelector("#closeReport"),
   overallScore: document.querySelector("#overallScore"),
+  evaluationSummary: document.querySelector("#evaluationSummary"),
+  evaluationRubricLabel: document.querySelector("#evaluationRubricLabel"),
+  rubricDisclaimer: document.querySelector("#rubricDisclaimer"),
   scoreRows: document.querySelector("#scoreRows"),
   nextNotes: document.querySelector("#nextNotes"),
+  askExplainer: document.querySelector("#askExplainer"),
+  dismissAskExplainer: document.querySelector("#dismissAskExplainer"),
+  voiceError: document.querySelector("#voiceError"),
+  voiceErrorText: document.querySelector("#voiceErrorText"),
+  retryVoice: document.querySelector("#retryVoice"),
+  processNudge: document.querySelector("#processNudge"),
+  processNudgeText: document.querySelector("#processNudgeText"),
+  dismissProcessNudge: document.querySelector("#dismissProcessNudge"),
+  sessionHistory: document.querySelector("#sessionHistory"),
+  historyCount: document.querySelector("#historyCount"),
+  historyList: document.querySelector("#historyList"),
+  endSessionDialog: document.querySelector("#endSessionDialog"),
+  confirmEndSession: document.querySelector("#confirmEndSession"),
+  captureWarning: document.querySelector("#captureWarning"),
+  exportReport: document.querySelector("#exportReport"),
   screenReaderStatus: document.querySelector("#screenReaderStatus"),
   undoBoard: document.querySelector("#undoBoard"),
   redoBoard: document.querySelector("#redoBoard"),
@@ -546,24 +600,169 @@ const els = {
   boardTextEditor: document.querySelector("#boardTextEditor"),
   excalidrawMount: document.querySelector("#excalidrawMount"),
   boardLoading: document.querySelector("#boardLoading"),
+  retryBoard: document.querySelector("#retryBoard"),
   board: document.querySelector("#board")
 };
 
 const ctx = els.board?.getContext("2d");
 const theme = getComputedStyle(document.documentElement);
 const voiceOwnerKey = "whiteboard-sim-active-voice-tab";
+const themeStorageKey = "whiteboard-sim-theme";
+const drawerStorageKey = "whiteboard-sim-drawer";
+const drawerTabStorageKey = "whiteboard-sim-drawer-tab";
 let voiceChannel = null;
 let microphoneResumeTimer = null;
+let infoToastTimer = null;
+let transcriptScrollFrame = 0;
+let typedTurnSequence = 0;
+const pendingTypedTurns = new Map();
 
 function init() {
   window.speechSynthesis?.cancel();
+  setupAppFrame();
   setupVoice();
   setupVoiceOwnership();
   offerResumeIfAvailable();
   bindEvents();
+  setupShellSelects();
   setupStickyChallenge();
   setupBoard();
+  setupFirstRunGuidance();
+  renderSessionHistory();
   render();
+  applyLayoutQaFixture();
+  setupLayoutRegressionGuard();
+}
+
+let layoutQaFrame = 0;
+
+function applyLayoutQaFixture() {
+  if (!/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) return;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("qa-scene-integrity") === "1" && els.excalidrawMount) {
+    const shapes = [1, 2, 3, 4].map((number) => ({
+      id: `qa-shape-${number}`, type: "rectangle", text: "", x: number * 200, y: 100, width: 160, height: 100,
+      boundElements: [`qa-text-${number}`], containerId: "", groupIds: [], points: []
+    }));
+    const labels = ["PERSONA", "ENTRY", "DETAIL", "DONE"].map((text, index) => ({
+      id: `qa-text-${index + 1}`, type: "text", text, containerId: `qa-shape-${index + 1}`,
+      x: (index + 1) * 200, y: 120, width: 80, height: 24, boundElements: [], groupIds: [], points: []
+    }));
+    const collapsedArrows = [1, 2, 3].map((number) => ({
+      id: `qa-arrow-${number}`, type: "arrow", text: "", x: 50 + number, y: 50, width: 0, height: 0,
+      points: [[0, 0], [0, 0]], startBinding: "qa-text-1", endBinding: "qa-text-1", boundElements: [], containerId: "", groupIds: []
+    }));
+    els.excalidrawMount.dataset.qaSceneSummary = summarizeBoardElements([...shapes, ...labels, ...collapsedArrows]);
+  }
+  if (params.get("qa-screen-semantics") === "1" && els.excalidrawMount) {
+    const flow = [0, 1, 2].map((index) => ({
+      id: `qa-flow-${index}`, type: "rectangle", text: "", x: 80 + index * 220, y: 40, width: 150, height: 80,
+      boundElements: [`qa-flow-label-${index}`], containerId: "", groupIds: [], points: []
+    }));
+    const flowLabels = ["Discover", "Compare", "Choose"].map((text, index) => ({
+      id: `qa-flow-label-${index}`, type: "text", text, containerId: `qa-flow-${index}`,
+      x: 110 + index * 220, y: 68, width: 80, height: 24, boundElements: [], groupIds: [], points: []
+    }));
+    const phones = [0, 1, 2].flatMap((index) => {
+      const x = 80 + index * 220;
+      return [
+        { id: `qa-phone-${index}`, type: "rectangle", text: "", x, y: 260, width: 140, height: 260, boundElements: [], containerId: "", groupIds: [], points: [] },
+        { id: `qa-phone-title-${index}`, type: "text", text: ["Home", "Results", "Detail"][index], x: x + 18, y: 286, width: 90, height: 24, boundElements: [], containerId: "", groupIds: [], points: [] },
+        { id: `qa-phone-copy-${index}`, type: "text", text: ["Welcome", "3 options", "Confirm choice"][index], x: x + 18, y: 340, width: 100, height: 24, boundElements: [], containerId: "", groupIds: [], points: [] },
+        { id: `qa-phone-button-${index}`, type: "rectangle", text: "", x: x + 20, y: 440, width: 100, height: 42, boundElements: [], containerId: "", groupIds: [], points: [] }
+      ];
+    });
+    els.excalidrawMount.dataset.qaScreenSummary = summarizeBoardElements([...flow, ...flowLabels, ...phones]);
+  }
+  if (params.get("qa-layout") !== "running") return;
+  document.body.dataset.session = "running";
+  if (els.phaseName) els.phaseName.textContent = "Sketch";
+  if (els.listeningTitle) els.listeningTitle.textContent = "Interviewer listening";
+  if (els.voiceStatus) els.voiceStatus.textContent = "Listening";
+  if (params.get("qa-toast") === "1" && els.processNudge) {
+    els.processNudge.hidden = false;
+    if (els.processNudgeText) els.processNudgeText.textContent = "Layout QA toast — controls should remain clear and clickable.";
+  }
+  if (params.get("qa-report") === "1" && els.scorecard) {
+    openReport();
+    if (els.overallScore) els.overallScore.textContent = "4.2 / 5";
+    if (els.evaluationSummary) {
+      els.evaluationSummary.hidden = false;
+      els.evaluationSummary.textContent = "Layout QA report preview.";
+    }
+    if (els.scoreRows && els.scoreRows.dataset.qaScoreStatuses !== "true") {
+      els.scoreRows.dataset.qaScoreStatuses = "true";
+      els.scoreRows.innerHTML = "";
+      [1, 2, 3, 4, 5].forEach((score) => appendScoreRow({
+        label: `QA criterion ${score}`,
+        score,
+        rationale: `Score ${score} status preview.`,
+        evidence: "Local layout fixture."
+      }));
+    }
+  }
+}
+
+function setupLayoutRegressionGuard() {
+  if (!/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) return;
+  window.__runWhiteboardLayoutQA = runLayoutRegressionGuard;
+  window.__summarizeWhiteboardElements = summarizeBoardElements;
+  window.addEventListener("resize", scheduleLayoutRegressionGuard);
+  scheduleLayoutRegressionGuard();
+}
+
+function scheduleLayoutRegressionGuard() {
+  if (!/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) return;
+  window.cancelAnimationFrame(layoutQaFrame);
+  layoutQaFrame = window.requestAnimationFrame(() => window.requestAnimationFrame(runLayoutRegressionGuard));
+}
+
+function runLayoutRegressionGuard() {
+  const failures = [];
+  const capsule = document.querySelector(".statusbar");
+  const footer = document.querySelector(".excalidraw .layer-ui__wrapper__footer");
+  const visible = (element) => {
+    if (!element || element.hidden) return false;
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0.5 && rect.height > 0.5;
+  };
+  const outside = (inner, outer) => inner.left < outer.left - 1 || inner.right > outer.right + 1 || inner.top < outer.top - 1 || inner.bottom > outer.bottom + 1;
+  const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+  if (visible(capsule)) {
+    const capsuleRect = capsule.getBoundingClientRect();
+    const escaped = [...capsule.querySelectorAll("*")]
+      .filter(visible)
+      .filter((element) => outside(element.getBoundingClientRect(), capsuleRect))
+      .slice(0, 8)
+      .map((element) => element.id || element.className || element.tagName);
+    if (escaped.length) failures.push(`Status capsule overflow: ${escaped.join(", ")}`);
+  }
+
+  if (visible(footer)) {
+    const footerRect = footer.getBoundingClientRect();
+    [capsule, els.voiceError, els.processNudge].filter(visible).forEach((overlay) => {
+      if (intersects(overlay.getBoundingClientRect(), footerRect)) failures.push(`${overlay.className || overlay.id} intersects the Excalidraw footer`);
+    });
+  }
+
+  if (visible(capsule)) {
+    const capsuleRect = capsule.getBoundingClientRect();
+    [els.voiceError, els.processNudge].filter(visible).forEach((overlay) => {
+      if (intersects(overlay.getBoundingClientRect(), capsuleRect)) failures.push(`${overlay.className || overlay.id} intersects the status capsule`);
+    });
+  }
+
+  const result = {
+    failures,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    drawer: document.body.dataset.drawer || "open",
+    theme: document.documentElement.dataset.theme || "light"
+  };
+  window.__whiteboardLayoutQA = result;
+  console.assert(failures.length === 0, "Whiteboard layout regression", result);
+  return result;
 }
 
 function setupStickyChallenge() {
@@ -584,20 +783,36 @@ function bindEvents() {
     state.difficulty = els.difficultySelect.value;
     render();
   });
-  els.companyCheckboxes.forEach((checkbox) => {
-    checkbox.addEventListener("change", updateCompanyFilter);
-  });
+  els.companySelect?.addEventListener("change", updateCompanyFilter);
   els.modeSelect.addEventListener("change", () => {
     state.mode = els.modeSelect.value;
     resetSession();
   });
   els.startSession.addEventListener("click", startSession);
-  els.endSession.addEventListener("click", endSession);
-  els.sendTurn.addEventListener("click", submitCandidateTurn);
+  els.capsuleStart?.addEventListener("click", startSession);
+  els.endSession.addEventListener("click", requestEndSession);
+  els.drawerToggle?.addEventListener("click", () => setDrawerState(document.body.dataset.drawer !== "open", true));
+  els.themeToggle?.addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true));
+  els.challengeToggle?.addEventListener("click", toggleChallengePopover);
+  els.closeReport?.addEventListener("click", closeReport);
+  els.confirmEndSession?.addEventListener("click", () => endSession({ force: true }));
+  els.dismissAskExplainer?.addEventListener("click", dismissAskExplainer);
+  els.retryVoice?.addEventListener("click", retryVoiceConnection);
+  els.dismissProcessNudge?.addEventListener("click", dismissProcessNudge);
+  els.retryBoard?.addEventListener("click", () => window.location.reload());
+  els.exportReport?.addEventListener("click", exportReport);
+  els.typedReasoning?.addEventListener("submit", submitCandidateTurn);
+  els.candidateInput?.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitCandidateTurn(event);
+  });
+  document.querySelectorAll("[data-board-template]").forEach((button) => {
+    button.addEventListener("click", () => state.insertBoardTemplate?.(button.dataset.boardTemplate));
+  });
   els.voiceToggle.addEventListener("click", (event) => {
     event.preventDefault();
     if (state.started && !state.ended && !state.listening && !state.realtimeConnecting) startListening();
   });
+  els.interviewerState.addEventListener("click", toggleInterviewerMute);
   els.askInterviewer.addEventListener("click", armDirectQuestion);
   els.undoBoard?.addEventListener("click", undoBoard);
   els.redoBoard?.addEventListener("click", redoBoard);
@@ -605,12 +820,15 @@ function bindEvents() {
   els.zoomIn?.addEventListener("click", () => zoomBoard(1.14));
   els.boardTextEditor?.addEventListener("blur", commitBoardText);
   els.boardTextEditor?.addEventListener("keydown", handleBoardTextKeydown);
-  els.candidateInput.addEventListener("keydown", (event) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitCandidateTurn();
-  });
   els.interviewerLog.addEventListener("scroll", () => {
     const remaining = els.interviewerLog.scrollHeight - els.interviewerLog.clientHeight - els.interviewerLog.scrollTop;
-    state.transcriptAutoScroll = remaining < 24;
+    state.transcriptAutoScroll = remaining <= 32;
+    renderJumpToLatest();
+  });
+  els.jumpToLatest?.addEventListener("click", () => {
+    state.transcriptAutoScroll = true;
+    pinTranscriptToLatest({ force: true });
+    renderJumpToLatest();
   });
   document.querySelectorAll(".tool").forEach((button) => {
     if (button.classList.contains("action-tool")) return;
@@ -621,15 +839,131 @@ function bindEvents() {
       button.classList.add("active");
     });
   });
+  document.addEventListener("click", (event) => {
+    if (!els.challengePopover?.hidden && !event.target.closest(".challenge-context")) closeChallengePopover();
+  });
+  document.addEventListener("keydown", handleAppFrameKeydown);
+}
+
+function setupAppFrame() {
+  const storedTheme = readPreference(themeStorageKey);
+  const preferredTheme = window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  applyTheme(["light", "dark"].includes(storedTheme) ? storedTheme : preferredTheme, false);
+  const storedDrawer = readPreference(drawerStorageKey);
+  setDrawerState(storedDrawer !== "closed", false);
+  const storedTab = readPreference(drawerTabStorageKey);
+  setDrawerTab(["transcript", "framework", "constraints", "history"].includes(storedTab) ? storedTab : "transcript", false);
+  const historyPanel = document.querySelector('[data-drawer-panel="history"]');
+  if (historyPanel && els.sessionHistory) {
+    historyPanel.appendChild(els.sessionHistory);
+    els.sessionHistory.open = true;
+  }
+  const drawerTabs = [...document.querySelectorAll("[data-drawer-tab]")];
+  drawerTabs.forEach((tabButton) => {
+    tabButton.addEventListener("click", () => setDrawerTab(tabButton.dataset.drawerTab, true));
+    tabButton.addEventListener("keydown", (event) => {
+      const keyByCode = { 35: "End", 36: "Home", 37: "ArrowLeft", 39: "ArrowRight" }[event.keyCode];
+      const key = keyByCode || (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.code) ? event.code : event.key);
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(key)) return;
+      event.preventDefault();
+      const current = Math.max(0, drawerTabs.indexOf(tabButton));
+      const index = key === "Home" ? 0 : key === "End" ? drawerTabs.length - 1 : (current + (key === "ArrowRight" ? 1 : -1) + drawerTabs.length) % drawerTabs.length;
+      setDrawerTab(drawerTabs[index].dataset.drawerTab, true);
+      drawerTabs[index].focus();
+    });
+  });
+}
+
+function readPreference(key) {
+  try { return localStorage.getItem(key) || ""; } catch { return ""; }
+}
+
+function writePreference(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* Storage can be unavailable in private contexts. */ }
+}
+
+function applyTheme(nextTheme, persist = false) {
+  const next = nextTheme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = next;
+  if (persist) writePreference(themeStorageKey, next);
+  els.themeToggle?.setAttribute("aria-label", `Use ${next === "dark" ? "light" : "dark"} theme`);
+  const background = getComputedStyle(document.documentElement).getPropertyValue("--bg-canvas").trim();
+  const detail = { theme: next, background };
+  state.setBoardTheme?.(detail);
+  window.dispatchEvent(new CustomEvent("whiteboard-theme-change", { detail }));
+  scheduleLayoutRegressionGuard();
+}
+
+function setDrawerState(isOpen, persist = false) {
+  const value = isOpen ? "open" : "closed";
+  document.body.dataset.drawer = value;
+  els.drawerToggle?.setAttribute("aria-pressed", String(isOpen));
+  els.drawerToggle?.setAttribute("aria-label", isOpen ? "Close interview drawer" : "Open interview drawer");
+  if (persist) writePreference(drawerStorageKey, value);
+  scheduleLayoutRegressionGuard();
+}
+
+function setDrawerTab(tab, persist = false) {
+  const next = ["transcript", "framework", "constraints", "history"].includes(tab) ? tab : "transcript";
+  document.querySelectorAll("[data-drawer-tab]").forEach((button) => {
+    const active = button.dataset.drawerTab === next;
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+  document.querySelectorAll("[data-drawer-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.drawerPanel !== next;
+  });
+  document.body.dataset.drawerTab = next;
+  if (persist) writePreference(drawerTabStorageKey, next);
+}
+
+function toggleChallengePopover(event) {
+  event.stopPropagation();
+  const willOpen = Boolean(els.challengePopover?.hidden);
+  if (els.challengePopover) els.challengePopover.hidden = !willOpen;
+  els.challengeToggle?.setAttribute("aria-expanded", String(willOpen));
+}
+
+function closeChallengePopover() {
+  if (els.challengePopover) els.challengePopover.hidden = true;
+  els.challengeToggle?.setAttribute("aria-expanded", "false");
+}
+
+function openReport() {
+  if (!els.scorecard) return;
+  els.scorecard.hidden = false;
+  document.body.dataset.report = "open";
+}
+
+function closeReport() {
+  if (!els.scorecard || els.scorecard.hidden) return;
+  els.scorecard.hidden = true;
+  document.body.dataset.report = "closed";
+  els.startSession?.focus();
+}
+
+function handleAppFrameKeydown(event) {
+  if (event.key === "Escape") {
+    if (!els.scorecard?.hidden) { event.preventDefault(); closeReport(); return; }
+    if (!els.challengePopover?.hidden) { event.preventDefault(); closeChallengePopover(); els.challengeToggle?.focus(); return; }
+    return;
+  }
+  if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === ".") {
+    event.preventDefault();
+    setDrawerState(document.body.dataset.drawer !== "open", true);
+  }
 }
 
 function startSession() {
   if (state.started) return;
+  if (els.askExplainer) els.askExplainer.hidden = true;
   if (state.ended) resetSession();
   state.started = true;
   state.ended = false;
   state.lastPhaseChangeAt = 0;
   state.phaseHistory = [{ id: currentPhase().id, label: currentPhase().label, startedAt: 0, endedAt: null }];
+  state.openingComplete = false;
+  state.answeredQuestionKeys = new Set();
   state.lastCandidateAt = Date.now();
   state.lastCanvasActivityAt = Date.now();
   state.lastInterjectionAt = 0;
@@ -642,11 +976,27 @@ function startSession() {
   state.timer = setInterval(tick, 1000);
   state.autosaveTimer = setInterval(saveSessionSnapshot, 10000);
   saveSessionSnapshot();
+  captureCanvasCheckpoint(state.boardElements, { force: true, reason: "phase-boundary" });
   render();
 }
 
-function endSession() {
+function requestEndSession() {
   if (!state.started) return;
+  const candidateTurns = state.transcript.filter((turn) => turn.role === "candidate" && String(turn.text || "").trim());
+  if (els.captureWarning) els.captureWarning.hidden = candidateTurns.length > 0;
+  if (els.endSessionDialog?.showModal) {
+    els.endSessionDialog.showModal();
+    return;
+  }
+  if (window.confirm("End this practice session and begin the evaluation?")) endSession({ force: true });
+}
+
+function endSession(options = {}) {
+  if (!state.started) return;
+  if (!options.force && !state.timeCalled) {
+    requestEndSession();
+    return;
+  }
   finalizePhaseHistory();
   state.ended = true;
   state.started = false;
@@ -666,6 +1016,7 @@ function resetSession() {
   clearInterval(state.autosaveTimer);
   clearSceneCaptureTimer();
   stopListening();
+  state.clearBoardScene?.();
   Object.assign(state, {
     started: false,
     ended: false,
@@ -680,6 +1031,8 @@ function resetSession() {
     phaseIndex: 0,
     phaseElapsed: 0,
     phaseHistory: [],
+    openingComplete: false,
+    answeredQuestionKeys: new Set(),
     lastPhaseChangeAt: 0,
     endedAtText: "",
     elapsed: 0,
@@ -698,11 +1051,18 @@ function resetSession() {
     lastCanvasActivityAt: 0,
     autosaveTimer: null,
     transcriptAutoScroll: true,
+    capturePending: false,
+    captureQuestionArmed: false,
+    captureTimeout: null,
     modelCallCount: 0,
     pendingOpening: false,
+    openingResponsePending: false,
     skipNextInterviewerTranscript: false,
     queuedRealtimeInstructions: "",
     queuedRealtimeOptions: null,
+    realtimeResponseWatchdog: null,
+    realtimeResponseMeta: null,
+    realtimeRequestSequence: 0,
     lastClarificationKey: "",
     lastClarificationAnswer: "",
     timer: null,
@@ -713,12 +1073,17 @@ function resetSession() {
     sceneElementsRaw: [],
     boardText: "",
     boardSummary: "",
+    boardAnalysis: null,
     lastSentSceneSignature: "",
     selectedId: null,
     textEditing: null,
     lastBoardActivityAt: 0,
     boardPrompted: false,
     firstBoardNudgeAt: 0,
+    shownNudges: new Set(),
+    activeNudge: "",
+    canvasCheckpoints: [],
+    lastCheckpointAt: -20000,
     voiceRunId: state.voiceRunId,
     realtime: null,
     realtimeReady: false,
@@ -728,6 +1093,8 @@ function resetSession() {
     localStream: null,
     remoteStream: null,
     remoteAudio: null,
+    interviewerMuted: false,
+    interviewerActivity: "Silent",
     listening: false,
     noSpeechTimer: null,
     transcriptText: "",
@@ -737,9 +1104,9 @@ function resetSession() {
     guidanceCount: 0
   });
   els.interviewerLog.innerHTML = "";
-  els.candidateInput.value = "";
+  if (els.transcriptEmpty) els.transcriptEmpty.hidden = false;
   els.liveTranscript.textContent = "";
-  els.scorecard.hidden = true;
+  closeReport();
   renderBoard();
   render();
 }
@@ -757,13 +1124,9 @@ function shuffleChallenge() {
 }
 
 function updateCompanyFilter() {
-  const selected = [...els.companyCheckboxes].filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.value);
-  state.companies = selected.length ? selected : ["Google"];
-  if (!selected.length) {
-    const google = [...els.companyCheckboxes].find((checkbox) => checkbox.value === "Google");
-    if (google) google.checked = true;
-  }
+  state.companies = [els.companySelect?.value || "Google"];
   renderCompanyPickerLabel();
+  updateEvaluationIdentity();
   if (!scenarioMatchesSelectedCompanies(scenarios[state.scenarioIndex])) shuffleChallenge();
   else render();
 }
@@ -774,45 +1137,79 @@ function scenarioMatchesSelectedCompanies(scenario) {
 
 function renderCompanyPickerLabel() {
   if (!els.companyPickerLabel) return;
-  els.companyCheckboxes.forEach((checkbox) => {
-    checkbox.checked = state.companies.includes(checkbox.value);
-  });
-  els.companyPickerLabel.textContent = state.companies.length === 1 ? state.companies[0] : `${state.companies.length} companies`;
-  els.companyPickerLabel.setAttribute("aria-label", `Companies: ${state.companies.join(", ")}`);
+  if (els.companySelect) els.companySelect.value = state.companies[0];
+  els.companyPickerLabel.textContent = state.companies[0];
+  els.companyPickerLabel.setAttribute("aria-label", `Company: ${state.companies[0]}`);
+  syncShellSelect(els.companySelect);
 }
 
-function submitCandidateTurn() {
-  const text = els.candidateInput.value.trim();
-  if (!text || !state.started || state.ended) return;
-  if (state.realtimeReady) {
-    sendRealtimeText(text);
-  } else {
-    processCandidateTurn(text, { forceResponse: true });
+function setupShellSelects() {
+  document.querySelectorAll("[data-shell-select]").forEach((root) => {
+    const input = root.querySelector('input[type="hidden"]');
+    const trigger = root.querySelector(".shell-select-trigger");
+    const menu = root.querySelector(".shell-select-menu");
+    const options = [...menu.querySelectorAll('[role="option"]')];
+    const close = () => {
+      menu.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+    };
+    const open = () => {
+      document.querySelectorAll(".shell-select-menu:not([hidden])").forEach((other) => { if (other !== menu) other.hidden = true; });
+      menu.hidden = false;
+      trigger.setAttribute("aria-expanded", "true");
+      (options.find((option) => option.dataset.value === input.value) || options[0])?.focus();
+    };
+    const choose = (option) => {
+      input.value = option.dataset.value;
+      trigger.textContent = option.textContent;
+      options.forEach((item) => item.setAttribute("aria-selected", String(item === option)));
+      close();
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      trigger.focus();
+    };
+    trigger.addEventListener("click", () => menu.hidden ? open() : close());
+    options.forEach((option) => option.addEventListener("click", () => choose(option)));
+    root.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") { close(); trigger.focus(); return; }
+      if (!["ArrowDown", "ArrowUp", "Home", "End", "Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      if (menu.hidden) { open(); return; }
+      const index = Math.max(0, options.indexOf(document.activeElement));
+      if (event.key === "Enter" || event.key === " ") { choose(options[index]); return; }
+      const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+      options[next].focus();
+    });
+    document.addEventListener("click", (event) => { if (!root.contains(event.target)) close(); });
+  });
+}
+
+function syncShellSelect(input) {
+  const root = input?.closest("[data-shell-select]");
+  if (!root) return;
+  const option = root.querySelector(`[role="option"][data-value="${CSS.escape(input.value)}"]`);
+  if (!option) return;
+  root.querySelector(".shell-select-trigger").textContent = option.textContent;
+  root.querySelectorAll('[role="option"]').forEach((item) => item.setAttribute("aria-selected", String(item === option)));
+}
+
+function selectedCompany() {
+  return state.companies[0] || "Google";
+}
+
+function updateEvaluationIdentity() {
+  const company = selectedCompany();
+  if (els.evaluationRubricLabel) els.evaluationRubricLabel.textContent = `${company} rubric`;
+  if (els.rubricDisclaimer) {
+    els.rubricDisclaimer.textContent = `Practice rubric based on publicly available ${company} product-design interview signals. Not affiliated with ${company} and not an official hiring scorecard.`;
   }
-  els.candidateInput.value = "";
-  render();
 }
 
 function processCandidateTurn(text, options = {}) {
   state.lastCandidateAt = Date.now();
   recordTranscriptTurn("candidate", text);
   announce(`Candidate: ${text}`);
-
-  if (requestQuietTime(text)) {
-    state.quietUntil = Date.now() + 120000;
-    respond("Of course, take your time.", false, { force: true });
-    render();
-    return;
-  }
-
-  const answer = answerQuestion(text);
-  if (answer) {
-    respond(answer, false, { force: true });
-  } else if (options.forceResponse && shouldInterviewerRespondTo(text)) {
-    respond(interviewerReaction(text), false, { force: true });
-  } else {
-    setSilent();
-  }
+  maybeAdvancePhase();
+  routeCandidateTurn(text, { directQuestion: options.forceResponse, local: true });
 }
 
 function setupVoice() {
@@ -869,6 +1266,7 @@ function toggleVoice() {
 
 function armDirectQuestion() {
   if (!state.started || state.ended) return;
+  if (els.askExplainer && !els.askExplainer.hidden) dismissAskExplainer();
   const alreadyArmed = state.directQuestionUntil > Date.now();
   state.directQuestionUntil = alreadyArmed ? 0 : Date.now() + 30000;
   if (!alreadyArmed) {
@@ -933,10 +1331,14 @@ async function startListening() {
   const runId = state.voiceRunId + 1;
   state.voiceRunId = runId;
   state.listening = true;
+  hideVoiceError();
   setListeningState("requesting", "Requesting microphone", "Allow microphone access if your browser asks.");
   els.voiceToggle.classList.add("listening");
   try {
-    await connectRealtime(runId);
+    await Promise.race([
+      connectRealtime(runId),
+      new Promise((_, reject) => window.setTimeout(() => reject(new Error("Interviewer connection timed out.")), 15000))
+    ]);
     if (!isActiveVoiceRun(runId)) return;
     setListeningState("listening", "Interviewer listening", "Think out loud. The interviewer will answer direct questions and otherwise observe.");
     armNoSpeechTimer();
@@ -1002,7 +1404,10 @@ async function connectRealtime(runId) {
   };
   pc.onconnectionstatechange = () => {
     if (isActiveVoiceRun(runId) && ["failed", "disconnected", "closed"].includes(pc.connectionState) && state.started && !state.ended) {
-      useFallback("Voice unavailable — continuing without live voice. Your board is safe. Press the mic to retry.");
+      if (state.capturePending) reportSpeechCaptureFailure();
+      state.listening = false;
+      disconnectRealtime();
+      useFallback("The interviewer connection was lost. Your board is safe; retry the microphone when you are ready.");
       els.voiceToggle.classList.remove("listening");
     }
   };
@@ -1049,6 +1454,8 @@ function isActiveVoiceRun(runId) {
 }
 
 function disconnectRealtime() {
+  clearSpeechCaptureTracking();
+  clearRealtimeResponseWatchdog();
   clearTimeout(microphoneResumeTimer);
   microphoneResumeTimer = null;
   cancelRealtimeResponse();
@@ -1058,6 +1465,7 @@ function disconnectRealtime() {
   state.realtimeResponseRequested = false;
   state.queuedRealtimeInstructions = "";
   state.queuedRealtimeOptions = null;
+  state.realtimeResponseMeta = null;
   if (state.realtime?.dc) state.realtime.dc.close();
   if (state.realtime?.pc) state.realtime.pc.close();
   state.realtime = null;
@@ -1076,6 +1484,7 @@ function handleRealtimeEvent(message) {
     // is paused for responses, but a buffered VAD event can still arrive.
     if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
     clearNoSpeechTimer();
+    beginSpeechCapture();
     state.lastCandidateAt = Date.now();
     state.interimText = "Listening...";
     setListeningState("receiving", "Hearing you", "I am hearing you. Keep thinking out loud.");
@@ -1085,6 +1494,7 @@ function handleRealtimeEvent(message) {
   if (event.type === "input_audio_buffer.speech_stopped") {
     if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
     state.interimText = "";
+    scheduleSpeechCaptureFailure();
     setListeningState("listening", "Interviewer listening", "I heard you. I will stay quiet unless you ask the interviewer directly.");
     renderLiveTranscript();
     return;
@@ -1092,35 +1502,36 @@ function handleRealtimeEvent(message) {
   if (event.type === "conversation.item.input_audio_transcription.completed") {
     if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
     const text = event.transcript?.trim();
+    const questionWasArmed = clearSpeechCaptureTracking();
     state.interimText = "";
-    if (text && shouldKeepTranscription(text, event) && !state.loggedCandidateItems.has(event.item_id || text)) {
-      const directQuestion = consumeDirectQuestionIntent(text);
+    const transcriptIsUsable = text && shouldKeepTranscription(text, event);
+    if (transcriptIsUsable && !state.loggedCandidateItems.has(event.item_id || text)) {
+      const directQuestion = questionWasArmed || consumeDirectQuestionIntent(text);
+      if (questionWasArmed) {
+        state.directQuestionUntil = 0;
+        renderAskInterviewer();
+      }
       state.loggedCandidateItems.add(event.item_id || text);
       state.transcriptText = `${state.transcriptText} ${text}`.trim();
       recordTranscriptTurn("candidate", text, { realtimeItemId: event.item_id || "" });
       logMessage("candidate", text);
       announce(`Candidate: ${text}`);
-      if (requestQuietTime(text)) {
-        state.quietUntil = Date.now() + 120000;
-        requestRealtimeResponse('Say exactly: "Of course, take your time." Then stop speaking.', { force: true });
-      } else {
-        const clarifyingAnswer = answerQuestion(text);
-        if (clarifyingAnswer) {
-          state.lastCandidateQuestionAt = Date.now();
-          requestRealtimeResponse(clarificationResponseInstruction(text, clarifyingAnswer), { force: true });
-        } else if ((directQuestion || shouldInterviewerRespondTo(text)) && canInterviewerSpeak({ direct: true }).allowed) {
-          state.lastCandidateQuestionAt = Date.now();
-          requestRealtimeResponse(responseInstructionFor(text, { directQuestion }));
-        } else {
-          els.interviewerState.textContent = "Listening";
-        }
-      }
+      maybeAdvancePhase();
+      routeCandidateTurn(text, { directQuestion });
+    } else if (!transcriptIsUsable) {
+      reportSpeechCaptureFailure({ questionWasArmed });
     }
     renderLiveTranscript();
     return;
   }
-  if (event.type === "conversation.item.created" && event.item?.id) {
+  if (event.type === "conversation.item.input_audio_transcription.failed") {
+    reportSpeechCaptureFailure();
+    renderLiveTranscript();
+    return;
+  }
+  if (["conversation.item.created", "conversation.item.added"].includes(event.type) && event.item?.id) {
     rememberRealtimeItem(event.item.id, event.item.role || "unknown");
+    confirmTypedTurnFromRealtimeItem(event.item);
     return;
   }
   if (event.type === "response.created") {
@@ -1144,13 +1555,16 @@ function handleRealtimeEvent(message) {
     return;
   }
   if (event.type === "response.done") {
+    const responseMeta = state.realtimeResponseMeta;
+    const wasOpeningResponse = state.openingResponsePending || state.skipNextInterviewerTranscript;
+    clearRealtimeResponseWatchdog();
+    state.realtimeResponseMeta = null;
     state.realtimeResponseActive = false;
     state.realtimeResponseRequested = false;
     const finalText = extractRealtimeResponseText(event) || state.interviewerDraft;
     if (finalText.trim()) {
       const text = sanitizeInterviewerText(finalText.trim());
-      if (state.skipNextInterviewerTranscript) {
-        state.skipNextInterviewerTranscript = false;
+      if (wasOpeningResponse) {
         const draft = els.interviewerLog.querySelector("[data-draft='true']");
         if (draft) draft.remove();
       } else {
@@ -1159,8 +1573,18 @@ function handleRealtimeEvent(message) {
         replaceInterviewerDraft(text);
         announce(`Interviewer: ${text}`);
       }
+    } else if (!wasOpeningResponse && responseMeta?.fallbackText) {
+      deliverRealtimeResponseFallback(responseMeta.fallbackText, "The live interviewer returned an empty answer.");
     }
+    // A transcript-less opening must never swallow the next real interviewer turn.
+    if (wasOpeningResponse) state.skipNextInterviewerTranscript = false;
     state.interviewerDraft = "";
+    if (state.openingResponsePending) {
+      state.openingResponsePending = false;
+      state.openingComplete = true;
+      maybeAdvancePhase();
+      window.setTimeout(showAskExplainerAfterOpening, 900);
+    }
     resumeMicrophoneAfterResponse();
     updateInterviewerState();
     flushQueuedRealtimeResponse();
@@ -1168,17 +1592,77 @@ function handleRealtimeEvent(message) {
   }
   if (event.type === "error") {
     const message = event.error?.message || "";
+    const responseMeta = state.realtimeResponseMeta;
+    const failedTypedTurn = event.error?.event_id ? pendingTypedTurns.get(event.error.event_id) : null;
+    if (failedTypedTurn) {
+      markTypedTurnFailed(failedTypedTurn, message || "The interviewer did not receive this message.");
+      return;
+    }
+    const questionAwaitingAnswer = state.lastCandidateQuestionAt > 0 && Date.now() - state.lastCandidateQuestionAt < 30000;
+    if (state.capturePending) reportSpeechCaptureFailure();
+    clearRealtimeResponseWatchdog();
+    state.realtimeResponseMeta = null;
     state.realtimeResponseActive = false;
     state.realtimeResponseRequested = false;
     state.interviewerDraft = "";
     resumeMicrophoneAfterResponse();
+    if (responseMeta?.fallbackText && !state.openingResponsePending) {
+      deliverRealtimeResponseFallback(responseMeta.fallbackText, message || "The live interviewer could not finish the answer.");
+      flushQueuedRealtimeResponse();
+      return;
+    }
     if (/cancel|no active response/i.test(message)) {
       setSilent();
       flushQueuedRealtimeResponse();
       return;
     }
+    if (questionAwaitingAnswer && !state.openingResponsePending) {
+      state.directQuestionUntil = Date.now() + 30000;
+      renderAskInterviewer();
+      const responseFailureMessage = "Your question was captured, but the interviewer could not answer. Please ask it again; Ask interviewer is still armed.";
+      recordTranscriptTurn("system", responseFailureMessage, { responseFailure: true });
+      logMessage("system", responseFailureMessage);
+      announce(responseFailureMessage);
+    }
     useFallback("Give me a moment to look at your board.");
   }
+}
+
+function beginSpeechCapture() {
+  clearTimeout(state.captureTimeout);
+  state.captureTimeout = null;
+  state.capturePending = true;
+  state.captureQuestionArmed = state.directQuestionUntil > Date.now();
+}
+
+function scheduleSpeechCaptureFailure() {
+  clearTimeout(state.captureTimeout);
+  if (!state.capturePending) return;
+  state.captureTimeout = window.setTimeout(() => reportSpeechCaptureFailure(), 7000);
+}
+
+function clearSpeechCaptureTracking() {
+  clearTimeout(state.captureTimeout);
+  const questionWasArmed = state.captureQuestionArmed;
+  state.captureTimeout = null;
+  state.capturePending = false;
+  state.captureQuestionArmed = false;
+  return questionWasArmed;
+}
+
+function reportSpeechCaptureFailure(options = {}) {
+  const questionWasArmed = options.questionWasArmed ?? state.captureQuestionArmed;
+  clearSpeechCaptureTracking();
+  state.interimText = "";
+  if (questionWasArmed) state.directQuestionUntil = Date.now() + 30000;
+  const message = questionWasArmed
+    ? "Question not captured. Please ask it again; Ask interviewer is still armed."
+    : "Speech not captured. Please say it again so it appears in the transcript.";
+  recordTranscriptTurn("system", message, { captureFailure: true });
+  logMessage("system", message);
+  setListeningState("no-speech", questionWasArmed ? "Question not captured" : "Speech not captured", message);
+  renderAskInterviewer();
+  announce(message);
 }
 
 function isRealtimeTextDelta(event) {
@@ -1385,6 +1869,82 @@ function shouldInterviewerRespondTo(text) {
   return false;
 }
 
+function routeCandidateTurn(text, options = {}) {
+  if (requestQuietTime(text)) {
+    state.quietUntil = Date.now() + 120000;
+    if (options.local) respond("Of course, take your time.", false, { force: true });
+    else requestRealtimeResponse('Say exactly: "Of course, take your time." Then stop speaking.', { force: true });
+    render();
+    return;
+  }
+
+  const requiredProbe = requiredFollowUpProbe(text);
+  const clarifyingAnswer = answerQuestion(text);
+  if (clarifyingAnswer) {
+    registerAnsweredQuestion(text);
+    state.lastCandidateQuestionAt = Date.now();
+    const fallbackAnswer = requiredProbe ? `${clarifyingAnswer} ${requiredProbe}` : clarifyingAnswer;
+    if (options.local) {
+      respond(fallbackAnswer, false, { force: true, localVoice: true });
+    } else {
+      const requested = requestRealtimeResponse(clarificationResponseInstruction(text, clarifyingAnswer, requiredProbe), {
+        force: true,
+        questionText: text,
+        fallbackText: fallbackAnswer
+      });
+      if (!requested) respond(fallbackAnswer, false, { force: true, localVoice: true });
+    }
+    return;
+  }
+
+  const directed = Boolean(options.directQuestion || shouldInterviewerRespondTo(text));
+  if (requiredProbe) {
+    const requested = options.local ? false : requestRealtimeResponse(responseInstructionFor(text, { directQuestion: directed, requiredProbe }), {
+      force: true,
+      questionText: text,
+      fallbackText: requiredProbe
+    });
+    if (!requested) respond(requiredProbe, false, { force: true, localVoice: true });
+    if (directed || isQuestion(text.toLowerCase())) registerAnsweredQuestion(text);
+    return;
+  }
+
+  if (directed && canInterviewerSpeak({ direct: true }).allowed) {
+    state.lastCandidateQuestionAt = Date.now();
+    const fallbackReaction = interviewerReaction(text);
+    const requested = options.local ? false : requestRealtimeResponse(responseInstructionFor(text, { directQuestion: true }), {
+      questionText: text,
+      fallbackText: fallbackReaction
+    });
+    if (!requested) respond(fallbackReaction, false, { force: true, localVoice: true });
+    registerAnsweredQuestion(text);
+    return;
+  }
+
+  if (options.local) setSilent();
+  else setInterviewerState("Listening");
+}
+
+function registerAnsweredQuestion(text) {
+  const key = normalizeBoardText(text).toLowerCase();
+  if (!key) return;
+  state.answeredQuestionKeys.add(key);
+  maybeAdvancePhase();
+}
+
+function consecutiveCandidateTurns() {
+  return window.WhiteboardTurnPolicy.consecutiveCandidateTurns(state.transcript);
+}
+
+function requiredFollowUpProbe(text) {
+  if (!window.WhiteboardTurnPolicy.shouldForceFollowUp({ text, phaseId: currentPhase().id, transcript: state.transcript })) return "";
+  return nextUnaddressedEdgeCase().probe;
+}
+
+function nextUnaddressedEdgeCase() {
+  return window.WhiteboardTurnPolicy.nextUnaddressedEdgeCase({ boardSummary: state.boardSummary, transcript: state.transcript });
+}
+
 function shouldKeepTranscription(text, event = {}) {
   const normalized = text.toLowerCase().trim();
   const words = getWords(normalized);
@@ -1405,6 +1965,9 @@ function responseInstructionFor(text, options = {}) {
   const common = "Speak like a real interviewer: brief, curious, never lecturing. One question or one comment, under 30 words. Do not explain the rubric. Never reveal hidden context unprompted. Reference the board only through the structured state.";
   const asksOpinion = /what do you think|do you think|does that make sense|am i on the right track|any feedback|give me feedback|do you have feedback|is that reasonable|is this reasonable|how does that sound/.test(text.toLowerCase());
   const soundsStuck = /i'?m stuck|i am stuck|i feel stuck|i'?m blocked|i am blocked|i don'?t know what to do|i'?m lost|i am lost|not sure where to go|not sure what to do/.test(text.toLowerCase());
+  if (options.requiredProbe) {
+    return `${base} The candidate has completed a walkthrough, stated a tradeoff, or would otherwise have two consecutive turns without interviewer response. Briefly acknowledge one concrete aspect of their explanation, then ask this probing follow-up: "${options.requiredProbe}" Do not answer it for them. ${common}`;
+  }
   if (soundsStuck) {
     return `${base} The candidate is stuck. Ask one neutral assessment question that makes them decide their own assumption, scope, or criterion. Do not solve. ${common}`;
   }
@@ -1417,7 +1980,7 @@ function responseInstructionFor(text, options = {}) {
   if (phase.id === "clarify") {
     return `${base} Phase rule: answer only the asked clarifying question using hidden context if directly relevant. Reveal at most one fact. Do not ask framing questions. ${common}`;
   }
-  if (phase.id === "wrap") {
+  if (phase.id === "summary") {
     return `${base} Phase rule: help the candidate summarize, measure success, and state next steps. Do not inject new constraints. ${common}`;
   }
   if (state.difficulty === "easy") {
@@ -1429,14 +1992,15 @@ function responseInstructionFor(text, options = {}) {
   return `${base} Medium mode: be professional, collaborative, and sharp. Expect the candidate to drive the framework without prompting. If they ask for feedback, challenge one assumption only when it lacks data or logic. ${common}`;
 }
 
-function clarificationResponseInstruction(question, seededAnswer) {
+function clarificationResponseInstruction(question, seededAnswer, requiredProbe = "") {
   return `The candidate asked this clarifying question: "${question}".
 Answer as the scenario's stakeholder. Use this established scenario fact as the core answer: "${seededAnswer}"
-Give the answer first, then add one concise sentence explaining why it is true from a user, business, operational, or technical perspective. You may invent one plausible supporting detail when useful, but frame the entire exchange as simulated interview context—not a real claim about an actual company. Commit to the answer and keep it internally consistent in later turns. Do not ask a question back. Stop after two short spoken sentences.`;
+Give the answer first, then add one concise sentence explaining why it is true from a user, business, operational, or technical perspective. You may invent one plausible supporting detail when useful, but frame the entire exchange as simulated interview context—not a real claim about an actual company. Commit to the answer and keep it internally consistent in later turns.${requiredProbe ? ` Then ask this probing follow-up: "${requiredProbe}"` : " Do not ask a question back."} Stop after ${requiredProbe ? "three" : "two"} short spoken sentences.`;
 }
 
 function createRealtimeOpening() {
   state.skipNextInterviewerTranscript = true;
+  state.openingResponsePending = true;
   requestRealtimeResponse(`Read this challenge aloud exactly, then stop: "${openingLine()}"`, { force: true });
 }
 
@@ -1458,43 +2022,175 @@ function phaseRulesForPrompt(id) {
     prompt: "Read or restate the challenge only. Volunteer nothing beyond the prompt text.",
     clarify: "Answer clarifying questions directly. Use hidden context first; when it does not contain the answer, invent one plausible simulated stakeholder detail, briefly explain why, and keep it consistent for the session. Never ask framing questions instead of answering.",
     framing: "Stay mostly silent. If truly needed, ask at most one guiding question after a long stall.",
-    explore: "Observe active work. Do not interrupt drawing or typing. Use at most one natural constraint injection if allowed by difficulty.",
-    wrap: "Become active around success metrics, summary, and what the candidate would do with more time. Never introduce new constraints."
+    flow: "Observe the journey construction. Probe only when a second candidate turn would otherwise go unanswered.",
+    sketch: "Observe active sketching and tradeoff reasoning. Probe unaddressed resilience risks without prescribing the design.",
+    summary: "Become active around success metrics, summary, and what the candidate would do with more time. Never introduce new constraints."
   };
   return rules[id] || "Stay brief and candidate-led.";
 }
 
 function sendRealtimeText(text) {
+  return createPendingTypedTurn(text);
+}
+
+function submitCandidateTurn(event) {
+  event?.preventDefault?.();
+  const text = els.candidateInput?.value.trim() || "";
+  if (!text) {
+    setCandidateSubmitStatus("Type a message before sending.", "error");
+    return;
+  }
+  if (!state.started || state.ended) {
+    setCandidateSubmitStatus(state.ended ? "This session has ended. Your text is still here." : "Start the session before sending. Your text is still here.", "error");
+    return;
+  }
+  if ([...pendingTypedTurns.values()].some((entry) => entry.status === "pending")) {
+    setCandidateSubmitStatus("Your previous message is still sending.", "pending");
+    return;
+  }
+  createPendingTypedTurn(text);
+}
+
+function createPendingTypedTurn(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return null;
+  const id = `typed_${Date.now()}_${typedTurnSequence += 1}`;
   state.lastCandidateAt = Date.now();
-  recordTranscriptTurn("candidate", text);
-  state.transcriptText = `${state.transcriptText} ${text}`.trim();
-  logMessage("candidate", text);
+  const transcriptTurn = recordTranscriptTurn("candidate", trimmed, { clientTurnId: id, delivery: "pending" });
+  state.transcriptText = `${state.transcriptText} ${trimmed}`.trim();
+  const messageElement = logMessage("candidate", trimmed, { clientTurnId: id, delivery: "pending" });
+  const entry = { id, text: trimmed, status: "pending", transcriptTurn, messageElement, timeout: null };
+  pendingTypedTurns.set(id, entry);
+  announce(`Candidate: ${trimmed}. Sending.`);
   renderLiveTranscript();
-  sendRealtimeEvent({
+  dispatchTypedTurn(entry);
+  return entry;
+}
+
+function dispatchTypedTurn(entry) {
+  window.clearTimeout(entry.timeout);
+  entry.status = "pending";
+  entry.transcriptTurn.delivery = "pending";
+  renderTypedTurnDelivery(entry);
+  setCandidateSubmitStatus("Sending…", "pending");
+  const sent = sendRealtimeEvent({
+    event_id: entry.id,
     type: "conversation.item.create",
     item: {
+      id: entry.id,
       type: "message",
       role: "user",
-      content: [{ type: "input_text", text }]
+      content: [{ type: "input_text", text: entry.text }]
     }
   });
-  if (requestQuietTime(text)) {
-    state.quietUntil = Date.now() + 120000;
-    requestRealtimeResponse('Say exactly: "Of course, take your time." Then stop speaking.', { force: true });
-  } else {
-    const clarifyingAnswer = answerQuestion(text);
-    if (clarifyingAnswer) {
-      requestRealtimeResponse(clarificationResponseInstruction(text, clarifyingAnswer), { force: true });
-    } else if (shouldInterviewerRespondTo(text) && canInterviewerSpeak({ direct: true }).allowed) {
-      requestRealtimeResponse(responseInstructionFor(text));
-    } else {
-      setSilent();
-    }
+  if (!sent) {
+    markTypedTurnFailed(entry, "The interviewer connection is unavailable. Retry when it reconnects.");
+    return;
   }
+  entry.timeout = window.setTimeout(() => {
+    markTypedTurnFailed(entry, "The interviewer did not confirm this message. Retry to send it again.");
+  }, 8000);
+}
+
+function confirmTypedTurnFromRealtimeItem(item) {
+  if (item.role !== "user") return;
+  const matchedById = pendingTypedTurns.get(item.id);
+  if (matchedById?.status === "pending") {
+    confirmTypedTurn(matchedById, item.id);
+    return;
+  }
+  const itemText = (item.content || [])
+    .map((part) => part.text || part.transcript || "")
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!itemText) return;
+  const entry = [...pendingTypedTurns.values()].find((candidate) => candidate.status === "pending" && candidate.text === itemText);
+  if (!entry) return;
+  confirmTypedTurn(entry, item.id);
+}
+
+function confirmTypedTurn(entry, realtimeItemId) {
+  window.clearTimeout(entry.timeout);
+  entry.timeout = null;
+  entry.status = "sent";
+  entry.transcriptTurn.delivery = "sent";
+  entry.transcriptTurn.realtimeItemId = realtimeItemId;
+  rememberRealtimeItem(realtimeItemId, "candidate");
+  renderTypedTurnDelivery(entry);
+  pendingTypedTurns.delete(entry.id);
+  if (els.candidateInput?.value.trim() === entry.text) els.candidateInput.value = "";
+  setCandidateSubmitStatus("Message sent.", "sent");
+  announce("Message sent.");
+  handleConfirmedTypedTurn(entry.text);
+}
+
+function markTypedTurnFailed(entry, reason) {
+  window.clearTimeout(entry.timeout);
+  entry.timeout = null;
+  entry.status = "failed";
+  entry.transcriptTurn.delivery = "failed";
+  entry.transcriptTurn.deliveryError = reason;
+  renderTypedTurnDelivery(entry, reason);
+  setCandidateSubmitStatus(`${reason} Your text is preserved.`, "error");
+  console.error("Typed interview turn was not delivered", { turnId: entry.id, text: entry.text, reason });
+  announce(`${reason} Your text is preserved. Use Retry to send it again.`);
+}
+
+function retryTypedTurn(id) {
+  const entry = pendingTypedTurns.get(id);
+  if (!entry || entry.status === "pending") return;
+  dispatchTypedTurn(entry);
+}
+
+function renderTypedTurnDelivery(entry, reason = "") {
+  const row = entry.messageElement;
+  if (!row) return;
+  row.dataset.delivery = entry.status;
+  let delivery = row.querySelector(".message-delivery");
+  if (!delivery) {
+    delivery = document.createElement("span");
+    delivery.className = "message-delivery";
+    row.appendChild(delivery);
+  }
+  delivery.replaceChildren();
+  if (entry.status === "pending") {
+    delivery.textContent = "Sending…";
+    return;
+  }
+  if (entry.status === "sent") {
+    delivery.textContent = "Sent";
+    return;
+  }
+  const label = document.createElement("span");
+  label.textContent = reason || "Not sent.";
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.textContent = "Retry";
+  retry.addEventListener("click", () => retryTypedTurn(entry.id));
+  delivery.append(label, retry);
+}
+
+function setCandidateSubmitStatus(message, kind = "") {
+  if (!els.candidateSubmitStatus) return;
+  els.candidateSubmitStatus.textContent = message;
+  els.candidateSubmitStatus.dataset.kind = kind;
+}
+
+function handleConfirmedTypedTurn(text) {
+  maybeAdvancePhase();
+  routeCandidateTurn(text);
 }
 
 function sendRealtimeEvent(event) {
-  if (state.realtime?.dc?.readyState === "open") state.realtime.dc.send(JSON.stringify(event));
+  if (state.realtime?.dc?.readyState !== "open") return false;
+  try {
+    state.realtime.dc.send(JSON.stringify(event));
+    return true;
+  } catch (error) {
+    console.error("Realtime event could not be sent", { type: event?.type, error });
+    return false;
+  }
 }
 
 function requestRealtimeResponse(instructions, options = {}) {
@@ -1502,7 +2198,7 @@ function requestRealtimeResponse(instructions, options = {}) {
   if (state.realtimeResponseActive || state.realtimeResponseRequested) {
     state.queuedRealtimeInstructions = instructions;
     state.queuedRealtimeOptions = { ...options, force: true };
-    els.interviewerState.textContent = "Queued";
+    setInterviewerState("Queued");
     return true;
   }
   if (!options.force && state.modelCallCount >= state.modelCallLimit) {
@@ -1510,19 +2206,77 @@ function requestRealtimeResponse(instructions, options = {}) {
     return false;
   }
   pruneRealtimeConversationWindow();
-  state.modelCallCount += 1;
+  const requestId = `response_${Date.now()}_${state.realtimeRequestSequence += 1}`;
   state.realtimeResponseRequested = true;
   state.realtimeResponseActive = true;
+  state.realtimeResponseMeta = {
+    requestId,
+    questionText: String(options.questionText || "").trim(),
+    fallbackText: String(options.fallbackText || "").trim()
+  };
   setMicrophoneCapture(false);
-  sendRealtimeEvent({
+  const sent = sendRealtimeEvent({
+    event_id: requestId,
     type: "response.create",
     response: {
       instructions: `${instructions}\nKeep it brief: one or two short spoken sentences. Always finish the sentence before stopping. Do not mention mode, rubric, constraint deck, tokens, or system instructions.`,
       max_output_tokens: 600
     }
   });
+  if (!sent) {
+    state.realtimeResponseRequested = false;
+    state.realtimeResponseActive = false;
+    state.realtimeResponseMeta = null;
+    resumeMicrophoneAfterResponse();
+    return false;
+  }
+  state.modelCallCount += 1;
+  armRealtimeResponseWatchdog(state.realtimeResponseMeta);
   renderCallCounter();
   return true;
+}
+
+function armRealtimeResponseWatchdog(meta) {
+  clearRealtimeResponseWatchdog();
+  if (!meta?.requestId) return;
+  state.realtimeResponseWatchdog = window.setTimeout(() => {
+    if (state.realtimeResponseMeta?.requestId !== meta.requestId) return;
+    sendRealtimeEvent({ type: "response.cancel" });
+    clearRemoteAudioBuffer();
+    state.realtimeResponseActive = false;
+    state.realtimeResponseRequested = false;
+    state.realtimeResponseMeta = null;
+    state.interviewerDraft = "";
+    const draft = els.interviewerLog.querySelector("[data-draft='true']");
+    if (draft) draft.remove();
+    if (meta.fallbackText) {
+      deliverRealtimeResponseFallback(meta.fallbackText, "The live interviewer took too long to answer.");
+    } else if (state.openingResponsePending) {
+      useFallback("The challenge is visible, but the interviewer voice did not start. You can continue or retry the microphone.");
+    } else {
+      const failure = "The interviewer did not answer. Your question is still in the transcript—please retry it.";
+      recordTranscriptTurn("system", failure, { responseFailure: true });
+      logMessage("system", failure);
+      announce(failure);
+    }
+    resumeMicrophoneAfterResponse();
+    flushQueuedRealtimeResponse();
+  }, 15000);
+}
+
+function clearRealtimeResponseWatchdog() {
+  if (state.realtimeResponseWatchdog) window.clearTimeout(state.realtimeResponseWatchdog);
+  state.realtimeResponseWatchdog = null;
+}
+
+function deliverRealtimeResponseFallback(text, reason = "") {
+  const answer = sanitizeInterviewerText(String(text || "").trim());
+  if (!answer) return;
+  recordTranscriptTurn("interviewer", answer, { responseFallback: true, failureReason: reason });
+  replaceInterviewerDraft(answer);
+  announce(`Interviewer: ${answer}`);
+  setInterviewerState("Speaking");
+  speakInterviewerText(answer);
 }
 
 function flushQueuedRealtimeResponse() {
@@ -1544,13 +2298,15 @@ function renderCallCounter() {
 function cancelRealtimeResponse() {
   if (!state.realtimeResponseActive) return;
   sendRealtimeEvent({ type: "response.cancel" });
+  clearRealtimeResponseWatchdog();
   state.realtimeResponseActive = false;
   state.realtimeResponseRequested = false;
+  state.realtimeResponseMeta = null;
   state.queuedRealtimeInstructions = "";
   state.queuedRealtimeOptions = null;
   state.interviewerDraft = "";
   resumeMicrophoneAfterResponse();
-  els.interviewerState.textContent = "Interrupted";
+  setInterviewerState("Interrupted");
 }
 
 function setMicrophoneCapture(enabled) {
@@ -1577,6 +2333,7 @@ function attachRemoteAudio(stream) {
   const audio = document.createElement("audio");
   audio.autoplay = true;
   audio.playsInline = true;
+  audio.muted = state.interviewerMuted;
   audio.srcObject = stream;
   document.body.appendChild(audio);
   state.remoteAudio = audio;
@@ -1595,6 +2352,7 @@ function clearRemoteAudioBuffer() {
 }
 
 function setInterviewerDraft(text) {
+  if (els.transcriptEmpty) els.transcriptEmpty.hidden = true;
   let draft = els.interviewerLog.querySelector("[data-draft='true']");
   if (!draft) {
     draft = document.createElement("div");
@@ -1609,7 +2367,7 @@ function setInterviewerDraft(text) {
     els.interviewerLog.appendChild(draft);
   }
   draft.querySelector(".message-text").textContent = text;
-  if (state.transcriptAutoScroll) els.interviewerLog.scrollTop = els.interviewerLog.scrollHeight;
+  pinTranscriptToLatest();
 }
 
 function replaceInterviewerDraft(text) {
@@ -1620,6 +2378,7 @@ function replaceInterviewerDraft(text) {
   } else {
     logMessage("interviewer", text);
   }
+  pinTranscriptToLatest();
 }
 
 function realtimeInstructions() {
@@ -1719,15 +2478,105 @@ function clearNoSpeechTimer() {
 }
 
 function useFallback(message) {
+  if (state.pendingOpening || state.openingResponsePending) {
+    state.pendingOpening = false;
+    state.openingResponsePending = false;
+    state.skipNextInterviewerTranscript = false;
+    state.openingComplete = true;
+    maybeAdvancePhase();
+  }
   setListeningState("fallback", "Voice setup needed", message);
-  els.transcriptDrawer.hidden = true;
-  els.transcriptDrawer.open = false;
+  showVoiceError(message);
   announce(message);
+}
+
+function showVoiceError(message) {
+  if (!els.voiceError || !els.voiceErrorText) return;
+  dismissProcessNudge();
+  window.clearTimeout(infoToastTimer);
+  els.voiceErrorText.textContent = message;
+  els.voiceError.hidden = false;
+}
+
+function hideVoiceError() {
+  if (els.voiceError) els.voiceError.hidden = true;
+}
+
+function retryVoiceConnection() {
+  if (!state.started || state.ended || state.realtimeConnecting) return;
+  hideVoiceError();
+  startListening();
+}
+
+function setupFirstRunGuidance() {
+  if (!els.askExplainer) return;
+  els.askExplainer.hidden = true;
+}
+
+function showAskExplainerAfterOpening() {
+  if (!els.askExplainer || !state.started || state.ended) return;
+  if (localStorage.getItem("whiteboard-sim-ask-tip-seen") === "1") return;
+  els.askExplainer.hidden = false;
+}
+
+function dismissAskExplainer() {
+  if (els.askExplainer) els.askExplainer.hidden = true;
+  localStorage.setItem("whiteboard-sim-ask-tip-seen", "1");
+}
+
+function maybeShowProcessNudge() {
+  if (!state.started || state.ended || state.activeNudge || !els.voiceError?.hidden) return;
+  const candidateText = state.transcript.filter((turn) => turn.role === "candidate").map((turn) => turn.text).join(" ").toLowerCase();
+  const boardLabels = state.boardElements.filter((element) => element.text).length;
+  const nudges = [
+    {
+      key: "framing",
+      after: 4 * 60 * 1000,
+      missing: !/\b(problem|goal|scope|success|user need|trying to)\b/.test(candidateText),
+      text: "Process check: briefly state the problem, primary user, scope, and success signal before going deeper."
+    },
+    {
+      key: "annotations",
+      after: 6 * 60 * 1000,
+      missing: state.boardElements.length > 0 && boardLabels === 0,
+      text: "Your board has structure but no labels yet. Add short annotations so the reasoning and flow remain legible."
+    },
+    {
+      key: "user",
+      after: 8 * 60 * 1000,
+      missing: !/\b(user|customer|person|people|audience|persona|technician|admin|traveler)\b/.test(candidateText),
+      text: "User check: name the primary user and the need or context driving your decisions."
+    }
+  ];
+  const nudge = nudges.find((item) => state.elapsed >= item.after && item.missing && !state.shownNudges.has(item.key));
+  if (!nudge) return;
+  state.shownNudges.add(nudge.key);
+  state.activeNudge = nudge.key;
+  els.processNudgeText.textContent = nudge.text;
+  els.processNudge.hidden = false;
+  window.clearTimeout(infoToastTimer);
+  infoToastTimer = window.setTimeout(dismissProcessNudge, 6000);
+}
+
+function dismissProcessNudge() {
+  window.clearTimeout(infoToastTimer);
+  infoToastTimer = null;
+  state.activeNudge = "";
+  if (els.processNudge) els.processNudge.hidden = true;
 }
 
 function setListeningState(kind, title, detail) {
   document.body.dataset.listening = kind;
-  els.voiceStatus.textContent = title.replace("Requesting microphone", "Requesting mic").replace("No speech detected", "No speech");
+  const compactVoiceLabels = {
+    idle: "Mic",
+    requesting: "Connecting",
+    listening: "Mic on",
+    receiving: "Mic on",
+    "no-speech": "Mic on",
+    fallback: "Retry mic",
+    ended: "Mic off"
+  };
+  els.voiceStatus.textContent = compactVoiceLabels[kind] || "Mic";
   els.listeningTitle.textContent = title;
   els.micHelp.textContent = detail;
   if (!currentTranscriptText()) {
@@ -1746,6 +2595,7 @@ function realtimeErrorMessage(error) {
   if (message.includes("Permission") || message.includes("NotAllowedError")) return "Microphone permission was blocked. Allow mic access, then restart the session.";
   if (message.includes("OPENAI_API_KEY")) return "Add OPENAI_API_KEY to a local .env file, then restart the server. The key stays server-side.";
   if (message.includes("404")) return "Voice server is not running. Start the local app server with OPENAI_API_KEY.";
+  if (/timed out/i.test(message)) return "The interviewer connection timed out. Check your connection, then retry the microphone.";
   if (message.includes("Voice start cancelled")) return "Mic paused.";
   if (/cancel|no active response/i.test(message)) return "Mic paused.";
   return "Voice unavailable — continuing without live voice. Your board is safe.";
@@ -1913,19 +2763,24 @@ function tick() {
   const remaining = Math.max(0, total - state.elapsed);
 
   updateCanvasIdleState();
+  const checkpointElements = state.sceneElementsRaw.length
+    ? state.sceneElementsRaw.map(boardElementFromExcalidraw).filter(Boolean)
+    : state.boardElements;
+  captureCanvasCheckpoint(checkpointElements);
   maybeAdvancePhase();
   const phase = currentPhase();
 
   if (phase.id === "clarify") maybeClarifyNudge();
   if (phase.id === "framing") maybeFramingGuidance();
-  if (phase.id === "explore") maybeConstraintInjection();
-  if (phase.id === "wrap") maybeWrapPrompts(remaining);
+  if (["flow", "sketch"].includes(phase.id)) maybeConstraintInjection();
+  if (phase.id === "summary") maybeWrapPrompts(remaining);
+  maybeShowProcessNudge();
 
   if (remaining <= 0 && !state.timeCalled) {
     state.timeCalled = true;
     interject("That's time — thanks for walking me through this.", { force: true, timer: true });
     window.setTimeout(() => {
-      if (state.started) endSession();
+      if (state.started) endSession({ force: true });
     }, 1200);
   }
   render();
@@ -1941,14 +2796,26 @@ function totalSessionMs() {
 
 function maybeAdvancePhase() {
   const phases = phasePlans[state.mode];
-  const phase = phases[state.phaseIndex];
-  if (!phase || state.phaseElapsed < phase.ms || state.phaseIndex >= phases.length - 1) return;
-  if (state.phaseHistory[state.phaseHistory.length - 1]) state.phaseHistory[state.phaseHistory.length - 1].endedAt = state.elapsed;
-  state.phaseIndex += 1;
-  state.phaseElapsed = 0;
-  state.lastPhaseChangeAt = state.elapsed;
-  state.phaseHistory.push({ id: currentPhase().id, label: currentPhase().label, startedAt: state.elapsed, endedAt: null });
-  saveSessionSnapshot();
+  const analysis = state.boardAnalysis || window.WhiteboardSceneAnalysis.analyzeScene(state.boardElements);
+  const candidateTurns = state.transcript.filter((turn) => turn.role === "candidate").map((turn) => turn.text);
+  const evidenceIndex = window.WhiteboardSceneAnalysis.evidencePhaseIndex({
+    openingComplete: state.openingComplete,
+    answeredQuestionCount: state.answeredQuestionKeys.size,
+    analysis,
+    candidateTurns
+  });
+  const targetIndex = Math.min(phases.length - 1, Math.max(state.phaseIndex, evidenceIndex));
+  let transitioned = false;
+  while (state.phaseIndex < targetIndex) {
+    if (state.phaseHistory[state.phaseHistory.length - 1]) state.phaseHistory[state.phaseHistory.length - 1].endedAt = state.elapsed;
+    state.phaseIndex += 1;
+    state.phaseElapsed = 0;
+    state.lastPhaseChangeAt = state.elapsed;
+    state.phaseHistory.push({ id: currentPhase().id, label: currentPhase().label, startedAt: state.elapsed, endedAt: null });
+    captureCanvasCheckpoint(state.boardElements, { force: true, reason: "phase-boundary" });
+    transitioned = true;
+  }
+  if (transitioned) saveSessionSnapshot();
 }
 
 function finalizePhaseHistory() {
@@ -1992,7 +2859,7 @@ function maybeConstraintInjection() {
   const limit = state.difficulty === "hard" ? 2 : 1;
   if (state.usedConstraintTexts.size >= limit) return;
   if (state.difficulty === "medium" && !candidateIsCruising()) return;
-  const noFraming = currentPhase().id === "explore" && !frameworkStepHasEvidence("frame") && !frameworkStepHasEvidence("user");
+  const noFraming = ["flow", "sketch"].includes(currentPhase().id) && !frameworkStepHasEvidence("frame") && !frameworkStepHasEvidence("user");
   if (noFraming) {
     interject("Pause there: what user and goal are you optimizing around?");
     return;
@@ -2071,22 +2938,23 @@ function respond(text, isInterjection = false, options = {}) {
   recordTranscriptTurn("interviewer", text, { isInterjection });
   if (isInterjection) maybePinConstraint(text);
   logMessage("interviewer", text);
-  els.interviewerState.textContent = "Speaking";
+  setInterviewerState("Speaking");
   announce(`Interviewer: ${text}`);
   const realtimeIsAvailable = state.listening || state.realtimeConnecting || state.realtimeReady || state.realtimeResponseActive || state.realtimeResponseRequested;
-  if (!realtimeIsAvailable) speakInterviewerText(text);
+  if (options.localVoice || !realtimeIsAvailable) speakInterviewerText(text);
 }
 
 function speakInterviewerText(text) {
   if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return;
   window.speechSynthesis.cancel();
+  if (state.interviewerMuted) return;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = 0.92;
   utterance.pitch = 1;
   utterance.volume = 1;
   utterance.onend = updateInterviewerState;
   utterance.onerror = updateInterviewerState;
-  els.interviewerState.textContent = "Speaking";
+  setInterviewerState("Speaking");
   window.speechSynthesis.speak(utterance);
 }
 
@@ -2098,6 +2966,30 @@ function sanitizeInterviewerText(text) {
 
 function setSilent() {
   updateInterviewerState();
+}
+
+function setInterviewerState(label) {
+  state.interviewerActivity = label;
+  els.interviewerState.dataset.activity = label.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
+  renderInterviewerMute();
+}
+
+function toggleInterviewerMute() {
+  state.interviewerMuted = !state.interviewerMuted;
+  if (state.remoteAudio) state.remoteAudio.muted = state.interviewerMuted;
+  if (state.interviewerMuted) window.speechSynthesis?.cancel();
+  renderInterviewerMute();
+  announce(state.interviewerMuted ? "Interviewer audio muted." : "Interviewer audio unmuted.");
+}
+
+function renderInterviewerMute() {
+  const action = state.interviewerMuted ? "Unmute interviewer audio" : "Mute interviewer audio";
+  els.interviewerState.classList.toggle("is-muted", state.interviewerMuted);
+  els.interviewerState.setAttribute("aria-pressed", String(state.interviewerMuted));
+  els.interviewerState.setAttribute("aria-label", action);
+  els.interviewerState.title = `${action} · ${state.interviewerActivity}`;
+  const accessibleLabel = els.interviewerState.querySelector(".sr-only");
+  if (accessibleLabel) accessibleLabel.textContent = action;
 }
 
 function openingLine() {
@@ -2130,7 +3022,8 @@ function requestQuietTime(text) {
   ].some((phrase) => normalized.includes(phrase));
 }
 
-function logMessage(role, text) {
+function logMessage(role, text, options = {}) {
+  if (els.transcriptEmpty) els.transcriptEmpty.hidden = true;
   const div = document.createElement("div");
   div.className = `message ${role}`;
   const label = document.createElement("span");
@@ -2140,29 +3033,222 @@ function logMessage(role, text) {
   body.className = "message-text";
   body.textContent = text;
   div.append(label, body);
+  if (options.clientTurnId) div.dataset.clientTurnId = options.clientTurnId;
+  if (options.delivery) div.dataset.delivery = options.delivery;
   els.interviewerLog.appendChild(div);
-  if (state.transcriptAutoScroll) els.interviewerLog.scrollTop = els.interviewerLog.scrollHeight;
+  pinTranscriptToLatest();
+  renderJumpToLatest();
+  return div;
 }
 
-function showDebrief() {
-  els.scorecard.hidden = false;
-  els.scoreRows.innerHTML = `<div class="debrief-loading">Building debrief from transcript, board, and timing...</div>`;
+function pinTranscriptToLatest(options = {}) {
+  const force = Boolean(options.force);
+  if (!force && !state.transcriptAutoScroll) return;
+  window.cancelAnimationFrame(transcriptScrollFrame);
+  transcriptScrollFrame = window.requestAnimationFrame(() => {
+    if (!force && !state.transcriptAutoScroll) return;
+    els.interviewerLog.scrollTo({ top: els.interviewerLog.scrollHeight, behavior: force ? "smooth" : "auto" });
+    renderJumpToLatest();
+    if (force) {
+      window.setTimeout(() => {
+        if (!state.transcriptAutoScroll) return;
+        els.interviewerLog.scrollTop = els.interviewerLog.scrollHeight;
+        renderJumpToLatest();
+      }, 350);
+    }
+  });
+}
+
+function renderJumpToLatest() {
+  if (!els.jumpToLatest) return;
+  const remaining = els.interviewerLog.scrollHeight - els.interviewerLog.clientHeight - els.interviewerLog.scrollTop;
+  const show = !state.transcriptAutoScroll && remaining > 32;
+  els.jumpToLatest.hidden = !show;
+}
+
+async function showDebrief() {
+  openReport();
+  updateEvaluationIdentity();
+  state.evaluating = true;
+  els.overallScore.textContent = "";
+  els.evaluationSummary.hidden = true;
+  els.evaluationSummary.textContent = "";
+  els.scoreRows.innerHTML = `<div class="debrief-loading" role="status"><span class="evaluation-spinner" aria-hidden="true"></span><span><strong>Building your report…</strong><small>Evaluating your reasoning, transcript, and canvas. This usually takes less than a minute.</small></span></div>`;
   els.nextNotes.innerHTML = "";
-  window.setTimeout(renderDebrief, 250);
+  els.scorecard.scrollTop = 0;
+  captureSceneElements(state.sceneElementsRaw);
+  captureCanvasCheckpoint(state.boardElements, { force: true, reason: "session-end" });
+  try {
+    const canvasImage = state.exportCanvasPng ? await state.exportCanvasPng() : "";
+    const response = await fetch("/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: scenarios[state.scenarioIndex].prompt,
+        transcript: state.transcript,
+        canvasImage,
+        sceneSummary: state.boardSummary,
+        sceneElements: state.boardElements,
+        constraints: state.constraints,
+        elapsedMs: state.elapsed,
+        company: selectedCompany(),
+        voiceAttempted: true,
+        canvasCheckpoints: state.canvasCheckpoints
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "The evaluation service did not respond.");
+    renderAiDebrief(payload);
+  } catch (error) {
+    renderDebrief();
+    const note = document.createElement("div");
+    note.className = "evaluation-error";
+    note.setAttribute("role", "alert");
+    note.textContent = `AI evaluation was unavailable (${error.message || "unknown error"}). Showing an on-device practice summary instead.`;
+    els.nextNotes.prepend(note);
+  } finally {
+    state.evaluating = false;
+  }
+}
+
+function renderAiDebrief(evaluation) {
+  updateEvaluationIdentity();
+  const scores = Array.isArray(evaluation.scores) ? evaluation.scores : [];
+  if (!scores.length) throw new Error("The evaluation response was incomplete.");
+  const scoredRows = scores.filter((row) => Number.isInteger(Number(row.score)) && Number(row.score) >= 1 && Number(row.score) <= 5);
+  if (scoredRows.length !== scores.length) throw new Error("The evaluation contained an invalid criterion score.");
+  const average = scoredRows.reduce((sum, row) => sum + Number(row.score), 0) / scoredRows.length;
+  els.overallScore.textContent = `${average.toFixed(1)} / 5`;
+  els.overallScore.setAttribute("aria-label", `Overall score ${average.toFixed(1)} out of 5`);
+  els.evaluationSummary.textContent = evaluation.summary || "";
+  els.evaluationSummary.hidden = !evaluation.summary;
+  els.scoreRows.innerHTML = "";
+  const reportGroups = [
+    {
+      title: "1 · Frame the right problem",
+      description: "Scoping, users, and the questions that shape the direction.",
+      labels: ["Problem framing & scope", "User focus & insight", "Clarifying questions & assumptions"]
+    },
+    {
+      title: "2 · Build a credible solution",
+      description: "Journey structure, core interactions, resilience, and design rationale.",
+      labels: ["Information architecture & journey", "Core solution & interaction flow", "Edge cases, accessibility & scale", "Tradeoffs, constraints & rationale"]
+    },
+    {
+      title: "3 · Work like a design partner",
+      description: "Clear narration, collaboration, and adaptation under feedback.",
+      labels: ["Communication & design narrative", "Collaboration & adaptability"]
+    }
+  ];
+  reportGroups.forEach((group) => {
+    const section = document.createElement("section");
+    section.className = "rubric-group";
+    const header = document.createElement("header");
+    header.className = "rubric-group-header";
+    const title = document.createElement("h3");
+    title.textContent = group.title;
+    const description = document.createElement("p");
+    description.textContent = group.description;
+    header.append(title, description);
+    const grid = document.createElement("div");
+    grid.className = "rubric-group-grid";
+    group.labels
+      .map((label) => scores.find((row) => row.label === label))
+      .filter(Boolean)
+      .forEach((row) => appendScoreRow(row, grid));
+    section.append(header, grid);
+    els.scoreRows.appendChild(section);
+  });
+  scores
+    .filter((row) => !reportGroups.some((group) => group.labels.includes(row.label)))
+    .forEach((row) => appendScoreRow(row, els.scoreRows));
+  els.nextNotes.innerHTML = "";
+  [
+    evaluation.strongestMoment ? `Strongest moment: ${evaluation.strongestMoment}` : "",
+    evaluation.priorityImprovement ? `Priority improvement: ${evaluation.priorityImprovement}` : "",
+    "This evaluates product reasoning and completeness—not drawing polish. Practice signal, not a prediction."
+  ].filter(Boolean).forEach(appendDebriefNote);
+  renderTimelineBar();
+  renderProcessSection();
+  openReport();
+  saveCompletedSession({
+    score: scoredRows.length ? `${average.toFixed(1)} / 5` : "Not scored",
+    summary: evaluation.summary || evaluation.priorityImprovement || "Evaluation completed."
+  });
+}
+
+function exportReport() {
+  if (!state.ended || !els.scorecard) return;
+  const reportText = [
+    "Whiteboarding report",
+    `Company: ${selectedCompany()}`,
+    `Challenge: ${scenarios[state.scenarioIndex].prompt}`,
+    `Duration: ${formatTime(state.elapsed)}`,
+    "",
+    ...[...els.scorecard.querySelectorAll("h2, h3, .evaluation-summary, .score-row, #nextNotes .note")]
+      .map((node) => node.textContent.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+  ].join("\n\n");
+  const url = URL.createObjectURL(new Blob([reportText], { type: "text/plain;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `whiteboarding-report-${selectedCompany().toLowerCase()}-${new Date().toISOString().slice(0, 10)}.txt`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function appendScoreRow(row, container = els.scoreRows) {
+  const score = Math.max(1, Math.min(5, Math.round(Number(row.score) || 1)));
+  const status = row.confidence === "insufficient" ? { kind: "insufficient", label: "Insufficient evidence" } : scoreStatus(score);
+  const div = document.createElement("div");
+  div.className = `score-row ${scoreStatusClass(status.kind)}`;
+  const dot = document.createElement("span");
+  dot.className = "score-dot";
+  dot.setAttribute("aria-hidden", "true");
+  const copy = document.createElement("div");
+  copy.className = "score-copy";
+  const titleLine = document.createElement("div");
+  titleLine.className = "score-title-line";
+  const title = document.createElement("strong");
+  title.textContent = row.label || "Rubric area";
+  const badge = document.createElement("span");
+  badge.className = "score-status";
+  badge.textContent = status.label;
+  const note = document.createElement("span");
+  note.textContent = row.rationale || row.feedback || row.note || "";
+  const evidence = document.createElement("span");
+  evidence.className = "score-evidence";
+  evidence.textContent = `Evidence: ${row.evidence || "No concrete evidence captured."}`;
+  const meter = document.createElement("span");
+  meter.className = "score-meter";
+  meter.setAttribute("aria-hidden", "true");
+  for (let index = 1; index <= 5; index += 1) {
+    const segment = document.createElement("i");
+    if (index <= score) segment.className = "filled";
+    meter.appendChild(segment);
+  }
+  const output = document.createElement("output");
+  output.setAttribute("aria-label", `${title.textContent} score ${score} out of 5`);
+  output.textContent = `${score}/5`;
+  titleLine.append(title, badge);
+  copy.append(titleLine, meter, note, evidence);
+  div.append(dot, copy, output);
+  container.appendChild(div);
 }
 
 function renderDebrief() {
   const scores = scoreSession();
-  const average = Math.round(scores.reduce((sum, row) => sum + row.score, 0) / scores.length);
-  const strengths = scores.filter((row) => scoreStatus(row.score).kind === "good").length;
-  const focusAreas = scores.length - strengths;
-  const leaning = overallLeaning(average, scores);
+  const scoredRows = scores.filter((row) => row.score > 0);
+  const average = scoredRows.length ? Math.round(scoredRows.reduce((sum, row) => sum + row.score, 0) / scoredRows.length) : 0;
+  const strengths = scoredRows.filter((row) => ["good", "strong"].includes(scoreStatus(row.score).kind)).length;
+  const focusAreas = scoredRows.length - strengths;
+  const leaning = scoredRows.length ? overallLeaning(average, scoredRows) : { label: "Not scored", reason: "Recording evidence was unavailable, so performance was not inferred." };
   els.overallScore.textContent = leaning.label;
   els.scoreRows.innerHTML = "";
   scores.forEach((row) => {
-    const status = scoreStatus(row.score);
+    const status = row.score === 0 ? { kind: "insufficient", label: "Not scored" } : scoreStatus(row.score);
     const div = document.createElement("div");
-    div.className = `score-row ${status.kind === "good" ? "score-good" : "score-improve"}`;
+    div.className = `score-row ${scoreStatusClass(status.kind)}`;
     div.innerHTML = `
       <span class="score-dot" aria-hidden="true"></span>
       <div class="score-copy">
@@ -2173,7 +3259,7 @@ function renderDebrief() {
         <span>${row.note}</span>
         <span class="score-evidence">Evidence: ${row.evidence}</span>
       </div>
-      <output aria-label="${row.label} score">${row.score}/5</output>
+      <output aria-label="${row.score === 0 ? `${row.label} not scored` : `${row.label} score`}">${row.score === 0 ? "Not scored" : `${row.score}/5`}</output>
     `;
     els.scoreRows.appendChild(div);
   });
@@ -2187,18 +3273,76 @@ function renderDebrief() {
   els.nextNotes.appendChild(summary);
   [
     `Overall leaning: ${leaning.label}. ${leaning.reason}`,
-    `Strongest moment: ${strongestMoment(scores)}`,
-    `This would have cost you the round: ${roundRisk(scores)}`,
+    scoredRows.length ? `Strongest moment: ${strongestMoment(scoredRows)}` : "",
+    scoredRows.length ? `Priority improvement: ${roundRisk(scoredRows)}` : "",
     "Practice signal, not a prediction."
-  ].forEach((note) => appendDebriefNote(note));
+  ].filter(Boolean).forEach((note) => appendDebriefNote(note));
   renderTimelineBar();
-  els.scorecard.hidden = false;
-  els.scorecard.scrollIntoView({ block: "start", behavior: "smooth" });
+  renderProcessSection();
+  openReport();
+  saveCompletedSession({ score: leaning.label, summary: leaning.reason });
+  els.scorecard.scrollTop = 0;
+}
+
+const sessionHistoryKey = "whiteboard-sim-session-history";
+
+function readSessionHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(sessionHistoryKey) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCompletedSession(result) {
+  const history = readSessionHistory();
+  const sessionId = `${state.endedAtText}-${state.scenarioIndex}-${state.elapsed}`;
+  if (history.some((item) => item.id === sessionId)) return;
+  history.unshift({
+    id: sessionId,
+    completedAt: new Date().toISOString(),
+    company: selectedCompany(),
+    challenge: scenarios[state.scenarioIndex].prompt,
+    score: result.score,
+    summary: result.summary
+  });
+  localStorage.setItem(sessionHistoryKey, JSON.stringify(history.slice(0, 20)));
+  renderSessionHistory();
+}
+
+function renderSessionHistory() {
+  if (!els.historyList || !els.historyCount) return;
+  const history = readSessionHistory();
+  els.historyCount.textContent = `${history.length} ${history.length === 1 ? "session" : "sessions"}`;
+  els.historyList.innerHTML = "";
+  if (!history.length) {
+    const empty = document.createElement("p");
+    empty.className = "history-empty sketch-empty";
+    empty.innerHTML = `<svg viewBox="0 0 96 84" aria-hidden="true"><path d="M22 13c15-4 39-3 53 1 3 19 2 42-2 58-16 3-38 2-53-1-2-17-1-42 2-58Z"></path><path d="M36 8h24l3 12H33L36 8ZM31 34c11-2 25-2 35 0M31 47c8-2 19-1 28 0M31 60c10-2 23-1 32 0"></path></svg><span>Completed practice reports will appear here.</span>`;
+    els.historyList.appendChild(empty);
+    return;
+  }
+  history.forEach((item) => {
+    const article = document.createElement("article");
+    const heading = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = item.challenge;
+    const score = document.createElement("span");
+    score.textContent = item.score;
+    heading.append(title, score);
+    const meta = document.createElement("small");
+    meta.textContent = `${item.company} · ${new Date(item.completedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+    const summary = document.createElement("p");
+    summary.textContent = item.summary;
+    article.append(heading, meta, summary);
+    els.historyList.appendChild(article);
+  });
 }
 
 function appendDebriefNote(note) {
   const div = document.createElement("div");
-  div.className = "note";
+  div.className = `note${note.startsWith("Strongest moment:") ? " strongest-moment" : ""}`;
   div.textContent = note;
   els.nextNotes.appendChild(div);
 }
@@ -2226,6 +3370,8 @@ function saveSessionSnapshot() {
     phaseIndex: state.phaseIndex,
     phaseElapsed: state.phaseElapsed,
     phaseHistory: normalizedPhaseHistory(),
+    openingComplete: state.openingComplete,
+    answeredQuestionKeys: [...state.answeredQuestionKeys],
     transcript: state.transcript,
     runningSummary: state.runningSummary,
     realtimeItems: state.realtimeItems,
@@ -2236,7 +3382,9 @@ function saveSessionSnapshot() {
     boardElements: state.boardElements,
     boardText: state.boardText,
     boardSummary: state.boardSummary,
-    sceneElementsRaw: state.sceneElementsRaw
+    sceneElementsRaw: state.sceneElementsRaw,
+    canvasCheckpoints: state.canvasCheckpoints,
+    lastCheckpointAt: state.lastCheckpointAt
   };
   localStorage.setItem("whiteboard-sim-autosave", JSON.stringify(snapshot));
 }
@@ -2272,6 +3420,8 @@ function offerResumeIfAvailable() {
     phaseIndex: snapshot.phaseIndex || 0,
     phaseElapsed: snapshot.phaseElapsed || 0,
     phaseHistory: snapshot.phaseHistory || [],
+    openingComplete: snapshot.openingComplete ?? true,
+    answeredQuestionKeys: new Set(snapshot.answeredQuestionKeys || []),
     transcript: snapshot.transcript || [],
     runningSummary: snapshot.runningSummary || "",
     realtimeItems: snapshot.realtimeItems || [],
@@ -2282,7 +3432,10 @@ function offerResumeIfAvailable() {
     boardElements: snapshot.boardElements || [],
     boardText: snapshot.boardText || "",
     boardSummary: snapshot.boardSummary || "",
+    boardAnalysis: window.WhiteboardSceneAnalysis.analyzeScene(snapshot.boardElements || []),
     sceneElementsRaw: snapshot.sceneElementsRaw || [],
+    canvasCheckpoints: snapshot.canvasCheckpoints || [],
+    lastCheckpointAt: snapshot.lastCheckpointAt ?? -20000,
     lastCandidateAt: Date.now(),
     lastCanvasActivityAt: Date.now()
   });
@@ -2327,8 +3480,18 @@ function maybePinConstraint(text) {
 }
 
 function scoreStatus(score) {
-  if (score >= 4) return { kind: "good", label: "Went well" };
-  return { kind: "improve", label: "Could improve" };
+  return window.WhiteboardScoreStatus.scoreStatus(score);
+}
+
+function scoreStatusClass(kind) {
+  const classes = {
+    strong: "score-strong",
+    good: "score-good",
+    improve: "score-improve",
+    "needs-work": "score-needs-work",
+    insufficient: "score-insufficient"
+  };
+  return classes[kind] || "score-needs-work";
 }
 
 function scoreSession() {
@@ -2338,14 +3501,24 @@ function scoreSession() {
   const has = (terms) => terms.some((term) => text.includes(term));
   const score = (base, yes) => Math.max(1, Math.min(5, base + yes));
   const evidence = (terms, fallback) => evidenceFor(terms) || fallback;
-  return [
+  const rows = [
     { label: "Problem framing & clarifying questions", score: score(1, (state.revealed.has("who") ? 1 : 0) + (state.revealed.has("goal") ? 1 : 0) + (has(["scope", "problem", "success"]) ? 1 : 0)), note: "Clarified before designing.", evidence: evidence(["scope", "problem", "success", "who", "goal"], "No explicit framing evidence captured.") },
     { label: "Users & context", score: score(1, (state.revealed.has("who") ? 2 : 0) + (has(["pain", "customer", "traveler", "admin", "technician", "persona"]) ? 1 : 0)), note: "Grounded choices in a user and context.", evidence: evidence(["user", "persona", "customer", "traveler", "admin", "technician", "pain"], "No explicit user evidence captured.") },
     { label: "Structure before UI", score: score(1, (has(["first", "then", "flow", "journey"]) ? 2 : 0) + (candidateTurns.length >= 3 ? 1 : 0)), note: "Moved through the problem before jumping to screens.", evidence: evidence(["first", "then", "flow", "journey", "step"], "No explicit structure evidence captured.") },
     { label: "Trade-offs & rationale", score: score(1, (has(["because", "tradeoff", "risk", "constraint", "alternative"]) ? 2 : 0) + (state.constraints.length ? 1 : 0)), note: "Explained why choices beat alternatives.", evidence: evidence(["because", "tradeoff", "risk", "constraint", "alternative"], "No explicit tradeoff evidence captured.") },
     { label: "Communication & narration", score: score(1, (words.length > 80 ? 1 : 0) + (has(["assume", "because", "i'm thinking", "i am thinking"]) ? 1 : 0) + (candidateTurns.length >= 4 ? 1 : 0)), note: "Made reasoning audible while working.", evidence: candidateTurns[0] ? quoteEvidence(candidateTurns[0].text) : "No candidate narration captured." },
-    { label: "Time management & wrap-up", score: score(1, (state.wrapSummaryPrompted ? 1 : 0) + (state.phaseIndex >= 4 ? 1 : 0) + (has(["measure", "metric", "more time", "summary"]) ? 1 : 0)), note: "Reached summary, metrics, and next steps.", evidence: evidence(["measure", "metric", "more time", "summary"], "No wrap-up evidence captured.") }
+    { label: "Time management & wrap-up", score: score(1, (state.wrapSummaryPrompted ? 1 : 0) + (state.phaseIndex >= 5 ? 1 : 0) + (has(["measure", "metric", "more time", "summary"]) ? 1 : 0)), note: "Reached summary, metrics, and next steps.", evidence: evidence(["measure", "metric", "more time", "summary"], "No wrap-up evidence captured.") }
   ];
+  if (!candidateTurns.length) {
+    const transcriptDependent = new Set(["Problem framing & clarifying questions", "Users & context", "Trade-offs & rationale", "Communication & narration", "Time management & wrap-up"]);
+    rows.forEach((row) => {
+      if (!transcriptDependent.has(row.label)) return;
+      row.score = 0;
+      row.note = "Not scored because no candidate speech was captured.";
+      row.evidence = "Recording evidence unavailable; this is not treated as missing candidate behavior.";
+    });
+  }
+  return rows;
 }
 
 function evidenceFor(terms) {
@@ -2393,6 +3566,41 @@ function renderTimelineBar() {
   els.nextNotes.append(bar, labels);
 }
 
+function renderProcessSection() {
+  const section = document.createElement("section");
+  section.className = "process-report";
+  const title = document.createElement("h3");
+  title.textContent = "Process";
+  const intro = document.createElement("p");
+  intro.textContent = `${state.canvasCheckpoints.length} canvas snapshots captured at 20-second intervals and phase boundaries.`;
+  const timeline = document.createElement("ol");
+  const boundaries = state.canvasCheckpoints.filter((checkpoint) => checkpoint.reason === "phase-boundary" || checkpoint.reason === "session-end");
+  const seen = new Set();
+  boundaries.forEach((checkpoint) => {
+    const key = `${checkpoint.phaseId}:${checkpoint.reason}`;
+    if (seen.has(key) && checkpoint.reason !== "session-end") return;
+    seen.add(key);
+    const item = document.createElement("li");
+    const header = document.createElement("div");
+    const phase = document.createElement("strong");
+    phase.textContent = checkpoint.reason === "session-end" ? "Session end" : checkpoint.phaseLabel;
+    const meta = document.createElement("span");
+    meta.textContent = `${formatTime(checkpoint.atMs)} · ${checkpoint.elementCount || 0} elements`;
+    const summary = document.createElement("p");
+    summary.textContent = checkpoint.summary || "Canvas empty at this boundary.";
+    header.append(phase, meta);
+    item.append(header, summary);
+    timeline.appendChild(item);
+  });
+  if (!timeline.children.length) {
+    const empty = document.createElement("li");
+    empty.textContent = "No phase-boundary snapshots were available for this session.";
+    timeline.appendChild(empty);
+  }
+  section.append(title, intro, timeline);
+  els.nextNotes.appendChild(section);
+}
+
 function normalizedPhaseHistory() {
   const history = state.phaseHistory.length ? state.phaseHistory : [{ id: currentPhase().id, label: currentPhase().label, startedAt: 0, endedAt: state.elapsed }];
   return history.map((item) => ({ ...item, endedAt: item.endedAt ?? state.elapsed }));
@@ -2400,10 +3608,21 @@ function normalizedPhaseHistory() {
 
 function setupBoard() {
   if (els.excalidrawMount) {
+    const boardLoadTimeout = window.setTimeout(() => {
+      if (!els.boardLoading || els.boardLoading.hidden) return;
+      els.boardLoading.querySelector("span").textContent = "The whiteboard is taking too long to load. Check your connection and try again.";
+      if (els.retryBoard) els.retryBoard.hidden = false;
+    }, 12000);
     window.whiteboardSession = {
       onChange(elements) {
         const liveElements = elements.filter((element) => !element.isDeleted);
         state.sceneElementsRaw = liveElements;
+        const structured = liveElements.map(boardElementFromExcalidraw).filter(Boolean);
+        state.boardElements = structured;
+        state.boardText = structured.map((element) => element.text).filter(Boolean).join(" ");
+        state.boardAnalysis = window.WhiteboardSceneAnalysis.analyzeScene(structured);
+        state.boardSummary = state.boardAnalysis.summary;
+        maybeAdvancePhase();
         markCanvasActivity("change");
         scheduleSceneCapture(liveElements);
         renderFrameworkTracker();
@@ -2415,16 +3634,43 @@ function setupBoard() {
           }
         }
       },
-      onReady() {
+      onReady(api = {}) {
+        window.clearTimeout(boardLoadTimeout);
+        state.exportCanvasPng = typeof api.exportPng === "function" ? api.exportPng : null;
+        state.clearBoardScene = typeof api.clearScene === "function" ? api.clearScene : null;
+        state.insertBoardTemplate = typeof api.insertTemplate === "function" ? api.insertTemplate : null;
+        state.setBoardTheme = typeof api.setTheme === "function" ? api.setTheme : null;
+        state.runCanvasHitTest = typeof api.runLeftEdgeHitTest === "function" ? api.runLeftEdgeHitTest : null;
+        if (/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) {
+          window.__runWhiteboardCanvasHitQA = async () => {
+            const result = state.runCanvasHitTest ? await state.runCanvasHitTest() : { passed: false, reason: "Canvas hit-test hook unavailable" };
+            console.assert(result.passed, "Whiteboard 5% canvas hit regression", result);
+            return result;
+          };
+          installCanvasHitQaControl();
+        }
+        state.setBoardTheme?.({
+          theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+          background: getComputedStyle(document.documentElement).getPropertyValue("--bg-canvas").trim()
+        });
         if (els.boardLoading) els.boardLoading.hidden = true;
+        scheduleLayoutRegressionGuard();
       },
       onError(message) {
+        window.clearTimeout(boardLoadTimeout);
         if (!els.boardLoading) return;
         els.boardLoading.hidden = false;
-        els.boardLoading.innerHTML = `<span class="material-symbols-rounded" aria-hidden="true">error</span><span>${message}</span>`;
+        els.boardLoading.querySelector("span").textContent = message;
+        if (els.retryBoard) els.retryBoard.hidden = false;
+      },
+      onToast(message) {
+        showBoardToast(message);
       }
     };
-    els.excalidrawMount.addEventListener("pointerdown", () => markCanvasActivity("pointer"), true);
+    els.excalidrawMount.addEventListener("pointerdown", () => {
+      if (document.body.dataset.drawer === "open") setDrawerState(false, false);
+      markCanvasActivity("pointer");
+    }, true);
     els.excalidrawMount.addEventListener("pointermove", () => markCanvasActivity("pointer"), true);
     els.excalidrawMount.addEventListener("pointerup", () => { state.canvasActive = false; state.lastCanvasActivityAt = Date.now(); }, true);
     els.excalidrawMount.addEventListener("keydown", () => markCanvasActivity("typing"), true);
@@ -2447,6 +3693,37 @@ function markCanvasActivity(kind = "change") {
   updateInterviewerState();
 }
 
+function showBoardToast(message) {
+  if (!els.processNudge || !els.processNudgeText) return;
+  state.activeNudge = "board-feedback";
+  els.processNudgeText.textContent = message;
+  els.processNudge.hidden = false;
+  window.clearTimeout(infoToastTimer);
+  infoToastTimer = window.setTimeout(dismissProcessNudge, 5000);
+  announce(message);
+}
+
+function installCanvasHitQaControl() {
+  if (new URLSearchParams(window.location.search).get("qa-canvas-hit") !== "1" || document.querySelector("#qaCanvasHitTest")) return;
+  const control = document.createElement("button");
+  control.id = "qaCanvasHitTest";
+  control.type = "button";
+  control.textContent = "Run canvas hit test";
+  const output = document.createElement("output");
+  output.id = "qaCanvasHitResult";
+  control.addEventListener("click", async () => {
+    try {
+      const result = state.runCanvasHitTest ? await state.runCanvasHitTest() : { passed: false, reason: "Canvas hit-test hook unavailable" };
+      output.value = result.passed ? `PASS: ${result.reason}` : `FAIL: ${result.reason}`;
+    } catch (error) {
+      output.value = `FAIL: ${error.message || "Canvas hit test threw an error"}`;
+    }
+    output.textContent = output.value;
+  });
+  els.boardPanel?.append?.(control, output);
+  if (!els.boardPanel) els.excalidrawMount?.parentElement?.append(control, output);
+}
+
 function scheduleSceneCapture(elements = state.sceneElementsRaw) {
   clearSceneCaptureTimer();
   state.sceneCaptureTimer = window.setTimeout(() => {
@@ -2466,12 +3743,33 @@ function clearSceneCaptureTimer() {
 
 function captureSceneElements(elements = state.sceneElementsRaw) {
   const structured = elements.map(boardElementFromExcalidraw).filter(Boolean);
+  const analysis = window.WhiteboardSceneAnalysis.analyzeScene(structured);
   state.boardElements = structured;
   state.boardText = structured.map((element) => element.text).filter(Boolean).join(" ");
-  state.boardSummary = summarizeBoardElements(structured);
+  state.boardAnalysis = analysis;
+  state.boardSummary = analysis.summary;
   state.strokes = structured;
+  captureCanvasCheckpoint(structured);
+  maybeAdvancePhase();
   renderFrameworkTracker();
   saveSessionSnapshot();
+}
+
+function captureCanvasCheckpoint(elements, options = {}) {
+  const settings = typeof options === "boolean" ? { force: options } : options;
+  const force = Boolean(settings.force);
+  if ((!state.started && !force) || (!force && state.elapsed - state.lastCheckpointAt < 20000)) return;
+  state.lastCheckpointAt = state.elapsed;
+  const analysis = window.WhiteboardSceneAnalysis.analyzeScene(elements);
+  state.canvasCheckpoints.push({
+    atMs: state.elapsed,
+    phaseId: currentPhase().id,
+    phaseLabel: currentPhase().label,
+    reason: settings.reason || "interval",
+    elementCount: analysis.elementCount,
+    summary: analysis.summary
+  });
+  state.canvasCheckpoints = state.canvasCheckpoints.slice(-120);
 }
 
 function boardElementFromExcalidraw(element) {
@@ -2487,7 +3785,13 @@ function boardElementFromExcalidraw(element) {
     height: Math.round(element.height || 0),
     startBinding: element.startBinding?.elementId || "",
     endBinding: element.endBinding?.elementId || "",
-    boundElements: (element.boundElements || []).map((item) => item.id).filter(Boolean)
+    boundElements: (element.boundElements || []).map((item) => item.id).filter(Boolean),
+    containerId: element.containerId || "",
+    groupIds: Array.isArray(element.groupIds) ? element.groupIds : [],
+    frameId: element.frameId || "",
+    points: Array.isArray(element.points)
+      ? element.points.slice(0, 40).map((point) => [Math.round(Number(point?.[0]) || 0), Math.round(Number(point?.[1]) || 0)])
+      : []
   };
 }
 
@@ -2495,7 +3799,7 @@ function normalizeBoardText(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
 }
 
-function summarizeBoardElements(elements) {
+function legacySummarizeBoardElements(elements) {
   if (!elements.length) return "";
   const counts = elements.reduce((acc, element) => {
     acc[element.type] = (acc[element.type] || 0) + 1;
@@ -2511,15 +3815,201 @@ function summarizeBoardElements(elements) {
     .slice(0, 12)
     .map((element) => `"${truncateText(element.text, 140)}"`)
     .join("; ");
-  const structure = elements
-    .filter((element) => element.type !== "text")
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const labelByContainer = boardLabelsByContainer(elements, byId);
+  const shapes = elements.filter(isBoardShape);
+  const screenCandidates = detectBoardScreens(elements, shapes, labelByContainer);
+  const containedByScreens = new Set(screenCandidates.flatMap((screen) => screen.containedElementIds));
+  const screenIds = new Set(screenCandidates.map((screen) => screen.element.id));
+  const topLevelShapes = shapes.filter((element) => !containedByScreens.has(element.id) || screenIds.has(element.id));
+  const structure = topLevelShapes
     .sort((a, b) => a.y - b.y || a.x - b.x)
     .slice(0, 12)
-    .map((element) => `${element.type} at ${boardRegion(element)}`)
+    .map((element) => {
+      const label = labelByContainer.get(element.id);
+      const screen = screenCandidates.find((candidate) => candidate.element.id === element.id);
+      const type = screen ? screen.role : element.type;
+      return `${type}${label ? ` labeled "${truncateText(label, 80)}"` : ""} at ${boardRegion(element)}`;
+    })
     .join("; ");
   const textSummary = typedText ? `Typed labels/notes: ${typedText}.` : "No typed labels captured yet.";
   const structureSummary = structure ? `Visible structure: ${structure}.` : "No visible shapes captured yet.";
-  return `${countText}. ${textSummary} ${structureSummary}`;
+  const connectors = elements.filter(isBoardConnector);
+  const connectorAnalyses = connectors.map((element) => analyzeBoardConnector(element, byId, labelByContainer));
+  const verifiedConnections = connectorAnalyses.filter((analysis) => analysis.status === "verified");
+  const rejectedConnections = connectorAnalyses.filter((analysis) => analysis.status !== "verified");
+  const connections = verifiedConnections.slice(0, 12).map((analysis) => `${analysis.fromLabel} → ${analysis.toLabel}`);
+  const groups = new Set(elements.flatMap((element) => element.groupIds || []).filter(Boolean));
+  const screensById = new Map(screenCandidates.map((screen) => [screen.element.id, screen]));
+  const labeledShapes = topLevelShapes.filter((element) => labelByContainer.has(element.id) || screensById.get(element.id)?.containedLabels.length).length;
+  const unlabeledShapes = topLevelShapes.length - labeledShapes;
+  const completeness = [
+    `${elements.length} readable elements`,
+    `${verifiedConnections.length} verified connections`,
+    `${rejectedConnections.length} ambiguous or degenerate connectors ignored`,
+    `${groups.size} groups`,
+    `${screenCandidates.length} probable screen frames`,
+    `${labeledShapes} labeled shapes`,
+    `${unlabeledShapes} unlabeled shapes`
+  ].join(", ");
+  const connectionSummary = connections.length
+    ? `Verified connections: ${connections.join("; ")}.`
+    : "No verified shape-to-shape connections captured.";
+  const screenSummary = summarizeBoardScreens(screenCandidates, topLevelShapes);
+  const rejectionSummary = rejectedConnections.length
+    ? `Ignored ${rejectedConnections.length} connector${rejectedConnections.length === 1 ? "" : "s"} because geometry collapsed, endpoints were missing, text-only, or resolved to the same shape; do not use them as flow evidence.`
+    : "";
+  return `${countText}. ${textSummary} ${structureSummary} ${screenSummary} ${connectionSummary} ${rejectionSummary} Completeness cues: ${completeness}.`.replace(/\s+/g, " ").trim();
+}
+
+function summarizeBoardElements(elements) {
+  return window.WhiteboardSceneAnalysis.analyzeScene(elements).summary;
+}
+
+function isBoardConnector(element) {
+  return element?.type === "arrow" || element?.type === "line";
+}
+
+function isBoardShape(element) {
+  return Boolean(element && !["text", "arrow", "line", "freedraw", "draw"].includes(element.type));
+}
+
+function boardLabelsByContainer(elements, byId = new Map(elements.map((element) => [element.id, element]))) {
+  const labels = new Map();
+  elements.filter((element) => element.type === "text" && element.text).forEach((textElement) => {
+    if (textElement.containerId && byId.has(textElement.containerId)) labels.set(textElement.containerId, textElement.text);
+  });
+  elements.filter(isBoardShape).forEach((shape) => {
+    if (labels.has(shape.id)) return;
+    const boundLabel = (shape.boundElements || [])
+      .map((id) => byId.get(id))
+      .find((element) => element?.type === "text" && element.text);
+    if (boundLabel) labels.set(shape.id, boundLabel.text);
+  });
+  return labels;
+}
+
+function boardElementBounds(element) {
+  const x = Number(element.x) || 0;
+  const y = Number(element.y) || 0;
+  const width = Math.abs(Number(element.width) || 0);
+  const height = Math.abs(Number(element.height) || 0);
+  return { left: x, top: y, right: x + width, bottom: y + height, width, height, area: width * height };
+}
+
+function boardElementInside(inner, outer, inset = 4) {
+  const innerBounds = boardElementBounds(inner);
+  const outerBounds = boardElementBounds(outer);
+  const centerX = innerBounds.left + innerBounds.width / 2;
+  const centerY = innerBounds.top + innerBounds.height / 2;
+  return centerX >= outerBounds.left + inset && centerX <= outerBounds.right - inset && centerY >= outerBounds.top + inset && centerY <= outerBounds.bottom - inset;
+}
+
+function detectBoardScreens(elements, shapes, labelByContainer) {
+  const textElements = elements.filter((element) => element.type === "text" && element.text);
+  const screenCue = /\b(screen|home|dashboard|profile|detail|results?|search|settings|checkout|login|sign[ -]?in|nav|menu|button|card|modal|empty state|error state|success)\b/i;
+  const candidates = shapes
+    .filter((element) => element.type === "rectangle")
+    .map((element) => {
+      const bounds = boardElementBounds(element);
+      const contained = elements.filter((candidate) => {
+        if (candidate.id === element.id || isBoardConnector(candidate)) return false;
+        if (candidate.type === "text" && candidate.containerId === element.id) return false;
+        return boardElementInside(candidate, element);
+      });
+      const containedLabels = textElements
+        .filter((textElement) => textElement.containerId !== element.id && boardElementInside(textElement, element))
+        .map((textElement) => textElement.text)
+        .filter(Boolean)
+        .slice(0, 8);
+      const labelText = [labelByContainer.get(element.id) || "", ...containedLabels].join(" ");
+      const phoneLike = bounds.width >= 96 && bounds.height >= 160 && bounds.height / Math.max(1, bounds.width) >= 1.35;
+      const populatedFrame = bounds.width >= 140 && bounds.height >= 110 && contained.length >= 3 && screenCue.test(labelText);
+      if (!phoneLike && !populatedFrame) return null;
+      if (phoneLike && contained.length === 0 && !screenCue.test(labelText)) return null;
+      return {
+        element,
+        bounds,
+        role: phoneLike ? "probable phone wireframe" : "screen-like wireframe frame",
+        containedElementIds: contained.map((candidate) => candidate.id),
+        containedCount: contained.length,
+        containedLabels
+      };
+    })
+    .filter(Boolean);
+  return candidates.filter((candidate) => !candidates.some((outer) => {
+    if (outer.element.id === candidate.element.id || outer.bounds.area < candidate.bounds.area * 1.5) return false;
+    return boardElementInside(candidate.element, outer.element, 0);
+  }));
+}
+
+function summarizeBoardScreens(screens, topLevelShapes) {
+  if (!screens.length) return "No screen-like wireframe frames identified from geometry; rely on the rendered canvas image for visual interpretation.";
+  const ordered = [...screens].sort((a, b) => a.bounds.top - b.bounds.top || a.bounds.left - b.bounds.left);
+  const centersX = ordered.map((screen) => screen.bounds.left + screen.bounds.width / 2);
+  const centersY = ordered.map((screen) => screen.bounds.top + screen.bounds.height / 2);
+  const widths = ordered.map((screen) => screen.bounds.width).sort((a, b) => a - b);
+  const heights = ordered.map((screen) => screen.bounds.height).sort((a, b) => a - b);
+  const medianWidth = widths[Math.floor(widths.length / 2)] || 1;
+  const medianHeight = heights[Math.floor(heights.length / 2)] || 1;
+  const xSpread = Math.max(...centersX) - Math.min(...centersX);
+  const ySpread = Math.max(...centersY) - Math.min(...centersY);
+  const arrangement = ordered.length === 1
+    ? "a single frame"
+    : ySpread <= medianHeight * 0.45
+      ? "a horizontal row"
+      : xSpread <= medianWidth * 0.45
+        ? "a vertical stack"
+        : "a spatial cluster or grid";
+  const screenTop = Math.min(...ordered.map((screen) => screen.bounds.top));
+  const screenIds = new Set(ordered.map((screen) => screen.element.id));
+  const shapesAbove = topLevelShapes.filter((shape) => !screenIds.has(shape.id) && boardElementBounds(shape).bottom <= screenTop + 16).length;
+  const relation = shapesAbove >= 2 ? ` positioned below ${shapesAbove} other top-level shapes` : "";
+  const details = ordered.slice(0, 6).map((screen, index) => {
+    const labels = screen.containedLabels.length ? ` with internal text "${screen.containedLabels.map((label) => truncateText(label, 48)).join(" / ")}"` : "";
+    return `screen ${index + 1} contains ${screen.containedCount} internal elements${labels}`;
+  }).join("; ");
+  return `Wireframe cues (geometry-based, confirm against the image): ${ordered.length} ${ordered.every((screen) => screen.role.includes("phone")) ? "probable phone wireframes" : "screen-like frames"} arranged as ${arrangement}${relation}. ${details}.`;
+}
+
+function boardConnectorSpan(element) {
+  const width = Math.abs(Number(element.width) || 0);
+  const height = Math.abs(Number(element.height) || 0);
+  const points = Array.isArray(element.points) ? element.points : [];
+  const pointSpan = points.length > 1
+    ? Math.hypot((Number(points.at(-1)?.[0]) || 0) - (Number(points[0]?.[0]) || 0), (Number(points.at(-1)?.[1]) || 0) - (Number(points[0]?.[1]) || 0))
+    : 0;
+  return Math.max(Math.hypot(width, height), pointSpan);
+}
+
+function resolveBoardBinding(bindingId, byId) {
+  const target = byId.get(bindingId);
+  if (!target) return null;
+  if (target.type === "text") {
+    const container = target.containerId ? byId.get(target.containerId) : null;
+    return container && isBoardShape(container) ? container : null;
+  }
+  return isBoardShape(target) ? target : null;
+}
+
+function boardElementLabel(element, labelByContainer) {
+  return labelByContainer.get(element.id) || `${element.type} at ${boardRegion(element)}`;
+}
+
+function analyzeBoardConnector(element, byId, labelByContainer) {
+  if (boardConnectorSpan(element) < 12) return { status: "degenerate" };
+  if (!element.startBinding || !element.endBinding) return { status: "unbound" };
+  const from = resolveBoardBinding(element.startBinding, byId);
+  const to = resolveBoardBinding(element.endBinding, byId);
+  if (!from || !to) return { status: "ambiguous-endpoint" };
+  if (from.id === to.id) return { status: "self-binding" };
+  return {
+    status: "verified",
+    fromId: from.id,
+    toId: to.id,
+    fromLabel: boardElementLabel(from, labelByContainer),
+    toLabel: boardElementLabel(to, labelByContainer)
+  };
 }
 
 function boardContextForPrompt() {
@@ -2955,47 +4445,40 @@ function cssColor(name) {
 
 function renderFrameworkTracker() {
   if (!els.frameworkTracker || !els.frameworkSteps) return;
-  els.frameworkTracker.hidden = true;
-  return;
-
+  els.frameworkTracker.hidden = false;
   els.frameworkModeLabel.textContent = state.difficulty === "easy" ? "Guided" : "Self-led";
-  const activeId = state.difficulty === "easy" ? currentFrameworkStepId() : "";
+  const activeId = state.started ? currentFrameworkStepId() : "";
   els.frameworkSteps.innerHTML = "";
   frameworkSteps.forEach((step) => {
-    const complete = frameworkStepHasEvidence(step.id);
-    const active = activeId === step.id && state.started;
+    const covered = frameworkStepHasEvidence(step.id);
+    const status = covered ? "covered" : activeId === step.id ? "active" : "pending";
     const li = document.createElement("li");
-    li.className = `${complete ? "complete" : ""} ${active ? "active" : ""}`.trim();
+    li.className = status;
+    li.dataset.status = status;
     li.innerHTML = `
-      <span class="framework-dot" aria-hidden="true">${complete ? "check" : active ? "radio_button_checked" : "radio_button_unchecked"}</span>
-      <span>${step.label}</span>
+      <span class="framework-dot" aria-hidden="true">${status === "covered"
+        ? '<svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>'
+        : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle></svg>'}</span>
+      <span>${step.label}</span><small>${status}</small>
     `;
     els.frameworkSteps.appendChild(li);
   });
 }
 
 function currentFrameworkStepId() {
-  const phase = phasePlans[state.mode][state.phaseIndex]?.id;
-  const mapping = {
-    prompt: "frame",
-    clarify: "frame",
-    framing: frameworkStepHasEvidence("user") ? "flow" : "user",
-    explore: frameworkStepHasEvidence("wire") ? "system" : "wire",
-    wrap: "validate"
-  };
-  return mapping[phase] || "frame";
+  return frameworkSteps.find((step) => !frameworkStepHasEvidence(step.id))?.id || "validate";
 }
 
 function frameworkStepHasEvidence(id) {
   const text = `${state.transcript.map((turn) => turn.text).join(" ")} ${state.boardText}`.toLowerCase();
   const has = (terms) => terms.some((term) => text.includes(term));
-  const shapeCount = state.boardElements.filter((element) => element.type !== "text").length;
+  const analysis = state.boardAnalysis || window.WhiteboardSceneAnalysis.analyzeScene(state.boardElements);
   const checks = {
     frame: state.revealed.has("goal") || state.revealed.has("constraint") || has(["goal", "success", "constraint", "scope", "problem"]),
     user: state.revealed.has("who") || has(["user", "persona", "customer", "traveler", "admin", "technician", "empathy", "pain"]),
-    flow: has(["flow", "journey", "path", "entry point", "step", "handoff", "recover", "onboarding"]),
+    flow: analysis.hasFlow,
     system: has(["system", "architecture", "tradeoff", "risk", "api", "latency", "permission", "scale", "trust"]),
-    wire: shapeCount >= 2 || has(["wireframe", "screen", "sketch", "layout", "component", "dashboard"]),
+    wire: analysis.hasSketchCluster,
     validate: has(["metric", "measure", "telemetry", "a/b", "experiment", "validate", "guardrail"])
   };
   return Boolean(checks[id]);
@@ -3004,7 +4487,7 @@ function frameworkStepHasEvidence(id) {
 function renderConstraintLedger() {
   if (!els.constraintList || !els.constraintCount) return;
   const total = state.constraints.length + state.assumptions.length;
-  if (els.constraintLedger) els.constraintLedger.hidden = total === 0;
+  if (els.constraintLedger) els.constraintLedger.hidden = false;
   els.constraintCount.textContent = `${total} pinned`;
   els.constraintList.innerHTML = "";
   if (!total) {
@@ -3052,21 +4535,27 @@ function render() {
   document.body.dataset.session = state.started ? "running" : state.ended ? "ended" : "idle";
   document.body.dataset.phase = state.started ? currentPhase().id : "idle";
   els.promptTitle.textContent = scenario.prompt;
+  if (els.challengePopoverText) els.challengePopoverText.textContent = scenario.prompt;
   els.stickyPrompt.textContent = scenario.prompt;
   els.difficultySelect.value = state.difficulty;
+  syncShellSelect(els.difficultySelect);
   renderCompanyPickerLabel();
   els.modeSelect.value = state.mode;
+  syncShellSelect(els.modeSelect);
   els.phaseName.textContent = state.started ? phases[state.phaseIndex].label : state.ended ? "Session complete" : "Not started";
-  els.phaseHint.textContent = state.started ? phaseHint(phases[state.phaseIndex].id) : state.ended ? `Ended at ${state.endedAtText || "session end"}. Challenge: ${scenario.prompt}` : "Start when you are ready.";
+  els.phaseHint.textContent = state.started ? phaseHint(phases[state.phaseIndex].id) : state.ended ? `Ended at ${state.endedAtText || "session end"}. Challenge: ${scenario.prompt}` : "";
   els.sessionClock.textContent = state.started ? formatTime(Math.max(0, totalSessionMs() - state.elapsed)) : formatTime(totalSessionMs());
+  if (els.topbarClock) els.topbarClock.textContent = els.sessionClock.textContent;
   els.budgetLabel.textContent = "";
   els.startSession.disabled = state.started;
   els.shuffleChallenge.disabled = state.started;
   els.startSession.textContent = state.started ? "In session" : state.ended ? "Start again" : "Start";
+  if (els.capsuleStartLabel) els.capsuleStartLabel.textContent = state.ended ? "Start again" : "Start practice";
   els.endSession.disabled = !state.started;
-  els.sendTurn.disabled = !state.started || state.ended;
   els.askInterviewer.disabled = !state.started || state.ended || !state.voiceAvailable;
   els.voiceToggle.disabled = !state.started || state.ended || !state.voiceAvailable;
+  els.interviewerState.disabled = state.ended;
+  renderInterviewerMute();
   els.voiceToggle.setAttribute("aria-pressed", String(state.listening || state.realtimeConnecting));
   els.voiceToggle.setAttribute("aria-label", state.listening || state.realtimeConnecting ? "Interviewer is listening" : "Reconnect interviewer voice");
   if (state.directQuestionUntil && state.directQuestionUntil <= Date.now()) state.directQuestionUntil = 0;
@@ -3077,30 +4566,31 @@ function render() {
   updateInterviewerState();
   if (!state.started && !state.ended && state.voiceAvailable) setListeningState("idle", "Ready", "Start connects the interviewer automatically.");
   if (state.ended) {
-    els.interviewerState.textContent = "Ended";
+    setInterviewerState("Ended");
   }
+  applyLayoutQaFixture();
 }
 
 function updateInterviewerState() {
   if (!state.started || state.ended) return;
   updateCanvasIdleState();
   if (Date.now() < state.quietUntil) {
-    els.interviewerState.textContent = "Quiet time — interviewer waiting";
+    setInterviewerState("Quiet time — interviewer waiting");
     return;
   }
   if (state.canvasActive || state.typingActive || Date.now() - state.lastCanvasActivityAt < 8000) {
-    els.interviewerState.textContent = "Observing your board";
+    setInterviewerState("Observing your board");
     return;
   }
   if (state.realtimeResponseActive) {
-    els.interviewerState.textContent = "Speaking";
+    setInterviewerState("Speaking");
     return;
   }
   if (state.listening) {
-    els.interviewerState.textContent = "Listening";
+    setInterviewerState("Listening");
     return;
   }
-  els.interviewerState.textContent = "Silent";
+  setInterviewerState("Silent");
 }
 
 function phaseHint(id) {
@@ -3108,8 +4598,9 @@ function phaseHint(id) {
     prompt: "Listen to the challenge. The interviewer will not add extra context unless you ask.",
     clarify: "Ask only the clarifying questions you need before committing to assumptions.",
     framing: "State your understanding, user, problem, success criteria, and scope.",
-    explore: "Think out loud while you map, sketch, compare directions, and make tradeoffs.",
-    wrap: "Summarize the decision, tradeoffs, success metrics, and what you would validate next."
+    flow: "Connect labeled steps into the core journey and explain the decisions between them.",
+    sketch: "Think out loud while you sketch screens, compare directions, and make tradeoffs.",
+    summary: "Summarize the decision, tradeoffs, success metrics, and what you would validate next."
   };
   return hints[id] || "Keep thinking out loud while you work.";
 }

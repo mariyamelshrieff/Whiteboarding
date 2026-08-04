@@ -6,6 +6,10 @@
       "use": "@vercel/node"
     },
     {
+      "src": "api/evaluate.js",
+      "use": "@vercel/node"
+    },
+    {
       "src": "index.html",
       "use": "@vercel/static"
     },
@@ -14,11 +18,43 @@
       "use": "@vercel/static"
     },
     {
+      "src": "astryx-theme.css",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "design-tokens.css",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "shell-system.css",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "app-frame.css",
+      "use": "@vercel/static"
+    },
+    {
       "src": "app.js",
       "use": "@vercel/static"
     },
     {
       "src": "excalidraw-board.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "scene-analysis.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "score-status.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "turn-policy.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "lucide-sprite.svg",
       "use": "@vercel/static"
     }
   ],
@@ -32,6 +68,14 @@
       "dest": "/api/token.js"
     },
     {
+      "src": "/evaluate",
+      "dest": "/api/evaluate.js"
+    },
+    {
+      "src": "/api/evaluate",
+      "dest": "/api/evaluate.js"
+    },
+    {
       "src": "/",
       "dest": "/index.html",
       "headers": {
@@ -39,7 +83,7 @@
       }
     },
     {
-      "src": "/(index\\.html|styles\\.css|app\\.js|excalidraw-board\\.js|start-app\\.command|README\\.md|favicon\\.ico)",
+      "src": "/(index\\.html|styles\\.css|astryx-theme\\.css|design-tokens\\.css|shell-system\\.css|app-frame\\.css|app\\.js|excalidraw-board\\.js|scene-analysis\\.js|score-status\\.js|turn-policy\\.js|lucide-sprite\\.svg|favicon\\.ico)",
       "dest": "/$1",
       "headers": {
         "Permissions-Policy": "microphone=(self)"

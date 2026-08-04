@@ -2,19 +2,20 @@
 
 A voice-first product design whiteboarding simulator for practicing high-stakes design interviews. The candidate works on an Excalidraw canvas while thinking out loud; the AI interviewer listens, asks realistic stakeholder questions, introduces constraints, and produces a rubric-based debrief.
 
-The MVP is tuned for product design, UX, and interaction design whiteboard challenges, with Google-style calibration for scale, ecosystem thinking, data validation, accessibility, and AI-system tradeoffs.
+The MVP is tuned for product design, UX, and interaction design whiteboard challenges, with company-aware practice calibration for Google, Meta, Apple, and Netflix.
 
 ## What It Does
 
-- Runs a 45-minute whiteboard interview simulation, with a 20-minute express option.
+- Runs a 30-minute whiteboard interview simulation, with a 20-minute express option.
 - Starts listening automatically when the session begins.
 - Uses OpenAI Realtime over WebRTC for spoken interviewer responses.
 - Supports native turn detection and barge-in so the interviewer stops when the candidate speaks.
 - Keeps a text fallback when voice or mic access is unavailable.
 - Embeds the open-source MIT-licensed Excalidraw board.
-- Captures Excalidraw typed text and board structure as context for interviewer feedback.
+- Combines the transcript, an exported Excalidraw PNG, and readable structured scene data in a server-side AI evaluation.
 - Shows the newest transcript messages at the top.
 - Produces a scannable report card with green dots for strengths and red dots for areas to improve.
+- Evaluates reasoning and completeness without judging drawing polish or aesthetics.
 - Supports Easy, Medium, and Hard interviewer modes.
 
 ## Interviewer Modes
@@ -31,24 +32,21 @@ A realistic UX lead testing ambiguity tolerance. The candidate is expected to dr
 
 A skeptical Senior Staff Designer or UX Director focused on systems, AI uncertainty, trust, latency, accessibility, scale, and tradeoffs. The prompt is intentionally broad, constraints are withheld at first, and severe pivots can appear mid-session.
 
-## Whiteboarding Rubric
+## Company-Aware Whiteboarding Rubrics
+
+The selected company determines the evaluation emphasis. Each practice profile is based on publicly available product-design interview signals and is not presented as an official internal hiring rubric.
 
 The report evaluates:
 
-- Problem framing and scoping
-- Clarifying questions
-- User empathy and persona definition
-- Journey and flow structure
-- Breadth before depth
-- Wire-level interface thinking
-- Systems and architecture thinking
-- Tradeoffs and constraints
-- Data, telemetry, and success metrics
-- Accessibility
-- Google-scale and ecosystem thinking
-- Collaboration with the interviewer
-- Adaptability under pushback
-- Time management
+- Problem framing and scope
+- User focus and insight
+- Clarifying questions and assumptions
+- Information architecture and journey
+- Core solution and interaction flow
+- Edge cases, accessibility, and scale
+- Tradeoffs, constraints, and rationale
+- Communication and design narrative
+- Collaboration and adaptability
 
 ## Security
 
@@ -85,6 +83,7 @@ Optional environment variables:
 ```sh
 OPENAI_REALTIME_MODEL=gpt-realtime-2
 OPENAI_REALTIME_VOICE=marin
+OPENAI_EVALUATION_MODEL=gpt-5-mini
 PORT=4173
 ```
 
@@ -108,19 +107,22 @@ Optional Vercel environment variables:
 ```sh
 OPENAI_REALTIME_MODEL=gpt-realtime-2
 OPENAI_REALTIME_VOICE=marin
+OPENAI_EVALUATION_MODEL=gpt-5-mini
 ```
 
-`vercel.json` rewrites `/token` to `/api/token`, so the client code works locally and on Vercel without exposing the API key.
+`vercel.json` rewrites `/token` and `/evaluate` to their serverless handlers, so the client works locally and on Vercel without exposing the API key.
 
 ## Project Structure
 
 ```text
 .
 ├── api/token.js           # Vercel serverless Realtime token endpoint
+├── api/evaluate.js        # Vercel serverless evaluation endpoint
 ├── app.js                 # Main simulator logic and interviewer behavior
+├── evaluation.mjs         # Shared server-side evaluation logic and rubric
 ├── excalidraw-board.js    # Excalidraw mount/bridge
 ├── index.html             # App shell
-├── server.mjs             # Local static server and /token endpoint
+├── server.mjs             # Local static server and server-only API endpoints
 ├── styles.css             # Material-inspired UI styles
 ├── vercel.json            # Vercel rewrite and permissions policy
 └── package.json           # Deployment metadata

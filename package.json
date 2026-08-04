@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "start": "node server.mjs",
+    "test": "node --test",
+    "test:evaluation": "node --test test/evaluation-golden.test.mjs",
     "vercel-build": "echo 'Static app: no build step required'"
   },
   "engines": {

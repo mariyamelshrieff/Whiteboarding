@@ -24,7 +24,7 @@ if [ ! -x "$NODE_BIN" ]; then
   exit 1
 fi
 
-export PORT="${PORT:-4174}"
+export PORT="${PORT:-4173}"
 
 echo "Starting Whiteboard Interview Simulator..."
 echo "Open http://127.0.0.1:$PORT/"

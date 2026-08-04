@@ -1,6 +1,7 @@
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
+import { evaluateSession } from "./evaluation.mjs";
 
 const root = process.cwd();
 loadLocalEnv();
@@ -26,6 +27,10 @@ createServer(async (request, response) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
     if (url.pathname === "/token") {
       await createRealtimeToken(request, response);
+      return;
+    }
+    if (url.pathname === "/evaluate") {
+      await createEvaluation(request, response);
       return;
     }
     serveStatic(url.pathname, response);
@@ -85,6 +90,22 @@ async function createRealtimeToken(request, response) {
   response.end(text);
 }
 
+async function createEvaluation(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { error: "Use POST for /evaluate." });
+    return;
+  }
+  try {
+    const body = await readJson(request, 4 * 1024 * 1024);
+    const evaluation = await evaluateSession(body);
+    response.setHeader("Cache-Control", "no-store");
+    sendJson(response, 200, evaluation);
+  } catch (error) {
+    console.error("Evaluation failed:", error);
+    sendJson(response, error.status || 500, { error: error.message || "The session could not be evaluated." });
+  }
+}
+
 function serveStatic(pathname, response) {
   const safePath = normalize(pathname === "/" ? "/index.html" : pathname).replace(/^(\.\.[/\\])+/, "");
   let filePath = join(root, safePath);
@@ -100,12 +121,12 @@ function serveStatic(pathname, response) {
   createReadStream(filePath).pipe(response);
 }
 
-function readJson(request) {
+function readJson(request, maxBytes = 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let data = "";
     request.on("data", (chunk) => {
       data += chunk;
-      if (data.length > 1024 * 1024) {
+      if (data.length > maxBytes) {
         request.destroy();
         reject(new Error("Request body is too large."));
       }

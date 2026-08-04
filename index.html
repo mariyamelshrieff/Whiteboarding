@@ -6,104 +6,191 @@
     <title>Whiteboard Interview Simulator</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@excalidraw/excalidraw@0.18.0/dist/prod/index.css?v=2" />
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./astryx-theme.css" />
+    <link rel="stylesheet" href="./design-tokens.css" />
+    <link rel="stylesheet" href="./shell-system.css" />
+    <link rel="stylesheet" href="./app-frame.css?v=14" />
   </head>
   <body>
     <main class="app">
       <header class="topbar">
         <div class="challenge-heading">
-          <div class="brand-lockup" aria-label="Whiteboard practice">
-            <span class="brand-mark" aria-hidden="true">W</span>
-            <span>Whiteboard practice</span>
+          <div class="brand-lockup" aria-label="Whiteboard simulator">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M4.5 16.5c2.2-5.5 4.9-8.1 7-6.1 2.4 2.3-1.2 7.3 2.1 7.3 2 0 3.6-1.5 5.3-4"></path>
+                <path d="M16.5 4.5v4M14.5 6.5h4"></path>
+                <circle cx="6" cy="19" r=".8" fill="currentColor" stroke="none"></circle>
+              </svg>
+            </span>
+            <span>Whiteboard simulator</span>
           </div>
-          <p class="eyebrow">Design challenge</p>
-          <h1 id="promptTitle">Design a system for appealing a policy violation.</h1>
-          <p class="app-name">Whiteboard Interview Simulator</p>
+          <div class="challenge-context">
+            <p class="eyebrow">Design challenge</p>
+            <button id="challengeToggle" class="challenge-trigger" type="button" aria-haspopup="dialog" aria-expanded="false">
+              <span id="promptTitle">Design a system for appealing a policy violation.</span>
+            </button>
+            <div id="challengePopover" class="challenge-popover" role="dialog" aria-label="Current design challenge" hidden>
+              <p class="popover-eyebrow">Design challenge</p>
+              <div class="marker-prompt">
+                <svg viewBox="0 0 600 96" preserveAspectRatio="none" aria-hidden="true"><path d="M8 18C126 5 251 10 359 7c87-2 169 5 231 14l-5 56c-130 7-250 2-376 8C135 88 72 84 11 76Z"></path></svg>
+                <p id="challengePopoverText">Design a system for appealing a policy violation.</p>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="session-controls">
-          <button id="shuffleChallenge" class="secondary-button" type="button" aria-label="Shuffle design challenge" title="Shuffle challenge">
-            <span class="material-symbols-rounded" aria-hidden="true">shuffle</span>
-            <span>Shuffle</span>
-          </button>
-          <select id="difficultySelect" aria-label="Challenge difficulty">
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard" selected>Hard</option>
-          </select>
-          <details id="companyPicker" class="company-picker">
-            <summary id="companyPickerLabel">Google</summary>
-            <div class="company-menu" role="group" aria-label="Company filter">
-              <label><input type="checkbox" name="company" value="Google" checked /> Google</label>
-              <label><input type="checkbox" name="company" value="Meta" /> Meta</label>
-              <label><input type="checkbox" name="company" value="Netflix" /> Netflix</label>
-              <label><input type="checkbox" name="company" value="Apple" /> Apple</label>
+          <div class="control-group setup-controls" role="group" aria-label="Exercise setup">
+            <button id="shuffleChallenge" class="secondary-button" type="button" aria-label="Shuffle design challenge" title="Shuffle challenge">
+              <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#shuffle"></use></svg>
+              <span>Shuffle</span>
+            </button>
+            <div class="shell-select" data-shell-select>
+              <input id="difficultySelect" type="hidden" value="hard" />
+              <button class="shell-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">Hard</button>
+              <div class="shell-select-menu" role="listbox" aria-label="Challenge difficulty" hidden>
+                <button type="button" role="option" data-value="easy" aria-selected="false">Easy</button>
+                <button type="button" role="option" data-value="medium" aria-selected="false">Medium</button>
+                <button type="button" role="option" data-value="hard" aria-selected="true">Hard</button>
+              </div>
             </div>
-          </details>
-          <select id="modeSelect" aria-label="Session length">
-            <option value="full">45 min · Full loop format</option>
-            <option value="express">20 min · Rapid round</option>
-          </select>
-          <button id="startSession" type="button">Start</button>
-          <button id="endSession" type="button">End</button>
+            <div id="companyPicker" class="shell-select company-picker" data-shell-select>
+              <input id="companySelect" type="hidden" value="Google" />
+              <button id="companyPickerLabel" class="shell-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">Google</button>
+              <div class="shell-select-menu company-menu" role="listbox" aria-label="Evaluation company" hidden>
+                <button type="button" role="option" data-value="Google" aria-selected="true">Google</button>
+                <button type="button" role="option" data-value="Meta" aria-selected="false">Meta</button>
+                <button type="button" role="option" data-value="Netflix" aria-selected="false">Netflix</button>
+                <button type="button" role="option" data-value="Apple" aria-selected="false">Apple</button>
+              </div>
+            </div>
+            <div class="shell-select mode-select-shell" data-shell-select>
+              <input id="modeSelect" type="hidden" value="full" />
+              <button class="shell-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">30 min · Full practice</button>
+              <div class="shell-select-menu" role="listbox" aria-label="Session duration" hidden>
+                <button type="button" role="option" data-value="full" aria-selected="true">30 min · Full practice</button>
+                <button type="button" role="option" data-value="express" aria-selected="false">20 min · Rapid round</button>
+              </div>
+            </div>
+          </div>
+          <span id="topbarClock" class="topbar-clock" aria-label="Session time">30:00</span>
+          <div class="control-group workspace-controls" role="group" aria-label="Workspace options">
+            <button id="drawerToggle" class="topbar-icon-button" type="button" aria-label="Toggle interview drawer" aria-pressed="true" aria-keyshortcuts="Control+Shift+Period Meta+Shift+Period"><svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#panel-right"></use></svg></button>
+            <button id="themeToggle" class="topbar-icon-button" type="button" aria-label="Toggle color theme"><svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#sun-moon"></use></svg></button>
+          </div>
+          <div class="control-group session-actions" role="group" aria-label="Session actions">
+            <button id="startSession" type="button">Start</button>
+            <button id="endSession" type="button">End</button>
+          </div>
         </div>
       </header>
 
       <section class="statusbar" aria-label="Session status">
+        <button id="capsuleStart" class="capsule-start" type="button">
+          <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#play"></use></svg>
+          <span id="capsuleStartLabel">Start practice</span>
+        </button>
         <div class="phase-summary">
           <div class="phase-chip">
-            <span class="material-symbols-rounded" aria-hidden="true">radio_button_unchecked</span>
+            <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#circle"></use></svg>
             <strong id="phaseName">Not started</strong>
           </div>
-          <span id="phaseHint">Start when you are ready.</span>
+          <span id="phaseHint"></span>
           <span id="micHelp" class="mic-help"></span>
         </div>
+        <section class="listening-panel" aria-label="Listening status">
+          <div class="listening-indicator" aria-hidden="true" title="Voice connection activity">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div>
+            <strong id="listeningTitle">Not listening yet</strong>
+            <p id="heardPreview">Start the session to open the microphone. Your spoken questions and narration will appear here.</p>
+          </div>
+        </section>
         <div class="session-metrics">
           <div class="time-chip" aria-label="Elapsed time">
-            <span class="material-symbols-rounded" aria-hidden="true">timer</span>
+            <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#timer"></use></svg>
             <span id="sessionClock">0:00</span>
           </div>
           <span id="callCounter" class="interviewer-chip dev-chip" hidden>0/12 calls</span>
-          <button id="askInterviewer" class="ask-interviewer" type="button" aria-label="Ask the interviewer with your next spoken turn" aria-pressed="false">
-            <span class="material-symbols-rounded" aria-hidden="true">contact_support</span>
-            <span id="askInterviewerLabel">Ask interviewer</span>
-          </button>
+          <div class="ask-interviewer-anchor">
+            <button id="askInterviewer" class="ask-interviewer" type="button" aria-label="Ask the interviewer with your next spoken turn" aria-pressed="false">
+              <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#circle-help"></use></svg>
+              <span id="askInterviewerLabel">Ask interviewer</span>
+            </button>
+            <div id="askExplainer" class="ask-explainer" role="note" hidden>
+              <span><strong>Ask interviewer</strong> before speaking to mark your next turn as a direct question.</span>
+              <button id="dismissAskExplainer" type="button" aria-label="Dismiss this tip">×</button>
+            </div>
+          </div>
           <button id="voiceToggle" class="mic-toggle" type="button" aria-label="Pause or resume listening">
-            <span class="material-symbols-rounded" aria-hidden="true">mic</span>
+            <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#mic"></use></svg>
             <span id="voiceStatus">Voice ready</span>
           </button>
-          <span id="interviewerState" class="interviewer-chip">Silent</span>
+          <button id="interviewerState" class="interviewer-chip interviewer-state" type="button" aria-label="Mute interviewer audio" aria-pressed="false" title="Mute interviewer audio">
+            <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#volume-x"></use></svg>
+            <span class="sr-only">Mute interviewer audio</span>
+          </button>
         </div>
       </section>
 
-      <section class="listening-panel" aria-label="Listening status">
-        <div class="listening-indicator" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <div>
-          <strong id="listeningTitle">Not listening yet</strong>
-          <p id="heardPreview">Start the session to open the microphone. Your spoken questions and narration will appear here.</p>
-        </div>
-      </section>
+      <div id="voiceError" class="voice-error" role="alert" hidden>
+        <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#mic-off"></use></svg>
+        <span id="voiceErrorText"></span>
+        <button id="retryVoice" type="button">Retry microphone</button>
+      </div>
+
+      <div id="processNudge" class="process-nudge" role="status" hidden>
+        <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#lightbulb"></use></svg>
+        <span id="processNudgeText"></span>
+        <button id="dismissProcessNudge" type="button" aria-label="Dismiss coaching prompt">×</button>
+      </div>
 
       <section id="scorecard" class="scorecard outcome-report" hidden aria-label="Whiteboarding report">
-        <div class="speaker-row">
-          <div>
-            <p class="eyebrow">Outcome</p>
-            <h2>Whiteboarding report</h2>
+        <header class="report-header">
+          <div class="speaker-row">
+            <div>
+              <p id="evaluationRubricLabel" class="eyebrow">Google rubric</p>
+              <h2>Whiteboarding report</h2>
+            </div>
+            <strong id="overallScore"></strong>
           </div>
-          <strong id="overallScore"></strong>
-        </div>
+          <div class="report-actions">
+            <button id="exportReport" class="secondary-button export-report" type="button">Export</button>
+            <button id="closeReport" class="report-close" type="button" aria-label="Close report">×</button>
+          </div>
+        </header>
+        <p id="evaluationSummary" class="evaluation-summary" hidden></p>
+        <p id="rubricDisclaimer" class="rubric-disclaimer">Practice rubric based on publicly available Google product-design interview signals. Not affiliated with Google and not an official hiring scorecard.</p>
         <div id="scoreRows"></div>
         <div id="nextNotes"></div>
       </section>
 
+      <details id="sessionHistory" class="session-history">
+        <summary>Practice history <span id="historyCount">0 sessions</span></summary>
+        <div id="historyList" class="history-list"></div>
+      </details>
+
+      <dialog id="endSessionDialog" class="confirm-dialog" aria-labelledby="endDialogTitle">
+        <form method="dialog">
+          <svg class="shell-icon confirm-dialog-icon" aria-hidden="true"><use href="./lucide-sprite.svg#circle-stop"></use></svg>
+          <h2 id="endDialogTitle">End this practice session?</h2>
+          <p>Your attempt will be finalized now and the evaluation will begin. You can’t resume this session afterward.</p>
+          <p id="captureWarning" class="capture-warning" hidden>No candidate speech was captured. Ending now may leave verbal criteria unscored.</p>
+          <div class="confirm-dialog-actions">
+            <button value="cancel" type="submit">Keep practicing</button>
+            <button id="confirmEndSession" class="danger-button" value="confirm" type="submit">End and evaluate</button>
+          </div>
+        </form>
+      </dialog>
+
       <section id="stickyChallenge" class="sticky-challenge" aria-label="Current whiteboard challenge" hidden>
-        <span class="material-symbols-rounded sticky-challenge-icon" aria-hidden="true">assignment</span>
+        <svg class="shell-icon sticky-challenge-icon" aria-hidden="true"><use href="./lucide-sprite.svg#clipboard"></use></svg>
         <div class="sticky-challenge-copy">
           <strong>Current challenge</strong>
           <span id="stickyPrompt"></span>
@@ -113,52 +200,74 @@
       <section class="workspace">
         <section class="board-panel" aria-label="Shared whiteboard">
           <div id="excalidrawMount" class="excalidraw-mount" aria-label="Excalidraw whiteboard"></div>
+          <div class="board-templates" aria-label="Whiteboard templates">
+            <span>Insert</span>
+            <button type="button" data-board-template="user-needs">User + needs</button>
+            <button type="button" data-board-template="goals-metrics">Goals + metrics</button>
+            <button type="button" data-board-template="constraints">Constraints</button>
+            <button type="button" data-board-template="journey">Journey strip</button>
+          </div>
           <div id="boardLoading" class="board-loading" role="status">
-            <span class="material-symbols-rounded" aria-hidden="true">draw</span>
+            <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#pencil"></use></svg>
             <span>Loading Excalidraw board...</span>
+            <button id="retryBoard" type="button" hidden>Retry whiteboard</button>
           </div>
           <textarea id="boardTextEditor" class="board-text-editor" aria-label="Canvas text" hidden></textarea>
           <canvas id="board" width="1600" height="1000" role="img" aria-label="Fallback drawing canvas. Use the candidate narration field to describe sketches for the interview record." hidden></canvas>
         </section>
 
         <aside class="interview-panel" aria-label="Interview">
-          <section id="frameworkTracker" class="framework-tracker" aria-label="Whiteboard framework progress" hidden>
-            <div class="side-section-header">
-              <span>Framework</span>
-              <span id="frameworkModeLabel">Hard mode</span>
-            </div>
-            <ol id="frameworkSteps" class="framework-steps"></ol>
-          </section>
+          <nav class="drawer-tabs" role="tablist" aria-label="Interview drawer">
+            <button id="drawerTabTranscript" type="button" role="tab" aria-selected="true" aria-controls="drawerPanelTranscript" data-drawer-tab="transcript">Transcript</button>
+            <button id="drawerTabConstraints" type="button" role="tab" aria-selected="false" aria-controls="drawerPanelConstraints" data-drawer-tab="constraints">Constraints</button>
+            <button id="drawerTabHistory" type="button" role="tab" aria-selected="false" aria-controls="drawerPanelHistory" data-drawer-tab="history">History</button>
+          </nav>
 
-          <section id="constraintLedger" class="constraint-ledger" aria-label="Pinned interview constraints" hidden>
+          <div id="drawerPanelConstraints" class="drawer-tab-panel" role="tabpanel" aria-labelledby="drawerTabConstraints" data-drawer-panel="constraints" hidden>
+          <section id="constraintLedger" class="constraint-ledger" aria-label="Pinned interview constraints">
             <div class="side-section-header">
               <span>Pinned constraints</span>
               <span id="constraintCount">0 pinned</span>
             </div>
             <ul id="constraintList" class="constraint-list" aria-live="polite"></ul>
           </section>
+          </div>
 
+          <div id="drawerPanelTranscript" class="drawer-tab-panel" role="tabpanel" aria-labelledby="drawerTabTranscript" data-drawer-panel="transcript">
           <section class="interviewer-card">
             <div class="speaker-row">
               <span>Interview transcript</span>
               <span id="budgetLabel" hidden></span>
             </div>
+            <div id="transcriptEmpty" class="sketch-empty">
+              <svg viewBox="0 0 96 76" aria-hidden="true"><path d="M13 13c17-7 52-6 67 2 3 12 2 29-4 39-12 4-27 5-39 3L22 68l3-17c-9-9-14-24-12-38Z"></path><path d="M28 29c12-3 27-2 39 0M28 41c8-2 19-1 28 0"></path></svg>
+              <p>Your conversation will appear here after you start.</p>
+            </div>
             <div id="interviewerLog" class="interviewer-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
+            <button id="jumpToLatest" class="jump-to-latest" type="button" hidden>Jump to latest</button>
+            <div id="liveTranscript" class="sr-only" aria-live="polite" aria-label="Live candidate transcript"></div>
           </section>
 
-          <details id="transcriptDrawer" class="transcript-drawer backup-drawer" hidden>
-            <summary>Text backup</summary>
-            <div id="liveTranscript" class="sr-only" aria-live="polite" aria-label="Live candidate transcript"></div>
-            <label for="candidateInput">Type only if the mic is unavailable</label>
-            <textarea id="candidateInput" placeholder="Ask or answer the interviewer here only as backup."></textarea>
-            <button id="sendTurn" type="button">Send</button>
-          </details>
+          <section class="report-empty" aria-label="Evaluation report preview">
+            <svg viewBox="0 0 112 96" aria-hidden="true">
+              <path d="M31 14c14-3 39-2 52 1 4 20 4 50-1 68-16 3-43 3-58-1-3-18-2-49 1-66 2-1 4-1 6-2Z"></path>
+              <path d="M43 8h25l3 13H40l3-13ZM39 39c12-2 28-2 39 0M39 52c8-1 21-1 29 0M39 65c10-2 25-1 34 0"></path>
+            </svg>
+            <p>Your evaluation report will appear after the session ends.</p>
+          </section>
+
+          </div>
+
+          <div id="drawerPanelHistory" class="drawer-tab-panel" role="tabpanel" aria-labelledby="drawerTabHistory" data-drawer-panel="history" hidden></div>
         </aside>
       </section>
       <div id="screenReaderStatus" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     </main>
 
-    <script src="./app.js"></script>
-    <script type="module" src="./excalidraw-board.js?v=2"></script>
+    <script src="./score-status.js?v=1"></script>
+  <script src="./scene-analysis.js?v=2"></script>
+    <script src="./turn-policy.js?v=1"></script>
+  <script src="./app.js?v=30"></script>
+  <script type="module" src="./excalidraw-board.js?v=5"></script>
   </body>
 </html>

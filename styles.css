@@ -95,7 +95,7 @@ body::before {
 .interviewer-card,
 .transcript-drawer {
   border-color: var(--astryx-line) !important;
-  box-shadow: 0 1px 2px rgba(21, 17, 12, .04) !important;
+  box-shadow: var(--shadow-card) !important;
 }
 
 .topbar {
@@ -114,7 +114,7 @@ body::before {
   margin-bottom: 18px;
   color: var(--astryx-slate);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: .01em;
 }
 
@@ -156,8 +156,12 @@ body::before {
   color: var(--astryx-slate) !important;
 }
 
-button,
-select,
+.session-controls button,
+.statusbar button,
+.listening-panel button,
+.transcript-drawer button,
+.board-loading button,
+.session-controls select,
 .company-picker summary {
   min-height: 38px !important;
   border: 1px solid var(--astryx-line-strong) !important;
@@ -170,18 +174,27 @@ select,
   box-shadow: none !important;
 }
 
-button:hover:not(:disabled),
+.session-controls button:hover:not(:disabled),
+.statusbar button:hover:not(:disabled),
+.listening-panel button:hover:not(:disabled),
+.transcript-drawer button:hover:not(:disabled),
+.board-loading button:hover:not(:disabled),
 .company-picker summary:hover,
-select:hover {
+.session-controls select:hover {
   border-color: var(--astryx-ink) !important;
   background: #fff !important;
   transform: translateY(-1px);
 }
 
-button:focus-visible,
-select:focus-visible,
-summary:focus-visible,
-textarea:focus-visible {
+.session-controls button:focus-visible,
+.statusbar button:focus-visible,
+.listening-panel button:focus-visible,
+.transcript-drawer button:focus-visible,
+.board-loading button:focus-visible,
+.session-controls select:focus-visible,
+.company-picker summary:focus-visible,
+#candidateInput:focus-visible,
+#boardTextEditor:focus-visible {
   outline: 3px solid rgba(22, 114, 236, .25) !important;
   outline-offset: 2px !important;
 }
@@ -198,7 +211,11 @@ textarea:focus-visible {
   color: var(--astryx-danger) !important;
 }
 
-button:disabled {
+.session-controls button:disabled,
+.statusbar button:disabled,
+.listening-panel button:disabled,
+.transcript-drawer button:disabled,
+.board-loading button:disabled {
   opacity: .42 !important;
 }
 
@@ -206,7 +223,7 @@ button:disabled {
   border: 1px solid var(--astryx-line) !important;
   border-radius: var(--astryx-radius) !important;
   background: var(--astryx-paper) !important;
-  box-shadow: 0 14px 40px rgba(21, 17, 12, .12) !important;
+  box-shadow: var(--shadow-pop) !important;
 }
 
 .company-menu label {
@@ -276,7 +293,7 @@ button:disabled {
 .side-section-header,
 .speaker-row {
   color: var(--astryx-ink) !important;
-  font-weight: 600 !important;
+  font-weight: 500 !important;
 }
 
 .framework-steps li.active {
@@ -642,7 +659,7 @@ body[data-listening="idle"] .mic-help {
   align-items: center;
   width: fit-content;
   gap: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--md-surface-container-low);
   color: var(--md-on-surface);
 }
@@ -763,7 +780,7 @@ body[data-listening="receiving"] .listening-panel p {
 .listening-indicator span {
   width: 6px;
   min-height: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--md-outline);
 }
 
@@ -1051,7 +1068,7 @@ canvas {
 
 .constraint-source {
   width: fit-content;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 2px 7px;
   background: #fce8e6;
   color: #a50e0e;
@@ -1142,7 +1159,7 @@ canvas {
 
 .backup-drawer:not([open]) summary {
   width: fit-content;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 6px 10px;
   background: var(--md-surface-container);
   color: var(--md-on-surface-variant);
@@ -1223,7 +1240,7 @@ textarea {
 .summary-dot {
   display: inline-block;
   flex: 0 0 auto;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .score-dot {
@@ -1274,7 +1291,7 @@ textarea {
 
 .score-status {
   flex: 0 0 auto;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 800;
@@ -1337,12 +1354,23 @@ textarea {
   font-size: 13px;
 }
 
+.evaluation-error {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid #f5c2c0;
+  border-radius: var(--ui-radius);
+  background: #fff5f5;
+  color: var(--ui-danger);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .timeline-bar {
   display: flex;
   width: 100%;
   height: 10px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--md-surface-container);
 }
 
@@ -1432,7 +1460,7 @@ body {
   padding: 12px 18px 10px;
   background: color-mix(in srgb, var(--ui-surface) 96%, transparent);
   border-bottom-color: var(--ui-border);
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+  box-shadow: var(--shadow-card);
 }
 
 .challenge-heading {
@@ -1555,7 +1583,7 @@ body[data-session="running"] .statusbar {
 .time-chip,
 .interviewer-chip {
   border: 1px solid var(--ui-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--ui-surface);
 }
 
@@ -1762,7 +1790,7 @@ body[data-listening="receiving"] .listening-panel p {
   padding: 10px 11px;
   font-size: 13px;
   line-height: 1.42;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+  box-shadow: var(--shadow-card);
 }
 
 .message-role {
@@ -1799,7 +1827,7 @@ body[data-listening="receiving"] .listening-panel p {
 
 .backup-drawer:not([open]) summary {
   border: 1px solid var(--ui-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--ui-surface);
   color: var(--ui-muted);
   box-shadow: var(--ui-shadow-sm);
@@ -1842,7 +1870,7 @@ textarea {
 }
 
 #overallScore {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 5px 10px;
   background: var(--ui-primary-soft);
   color: var(--ui-primary-soft-text);
@@ -1962,7 +1990,7 @@ body[data-phase="wrap"] .time-chip {
   width: 100%;
   height: 10px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--ui-surface-muted);
 }
 
