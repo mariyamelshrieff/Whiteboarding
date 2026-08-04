@@ -570,6 +570,7 @@ const els = {
   liveTranscript: document.querySelector("#liveTranscript"),
   scorecard: document.querySelector("#scorecard"),
   closeReport: document.querySelector("#closeReport"),
+  viewReport: document.querySelector("#viewReport"),
   overallScore: document.querySelector("#overallScore"),
   evaluationSummary: document.querySelector("#evaluationSummary"),
   evaluationRubricLabel: document.querySelector("#evaluationRubricLabel"),
@@ -795,6 +796,7 @@ function bindEvents() {
   els.themeToggle?.addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true));
   els.challengeToggle?.addEventListener("click", toggleChallengePopover);
   els.closeReport?.addEventListener("click", closeReport);
+  els.viewReport?.addEventListener("click", openReport);
   els.confirmEndSession?.addEventListener("click", () => endSession({ force: true }));
   els.dismissAskExplainer?.addEventListener("click", dismissAskExplainer);
   els.retryVoice?.addEventListener("click", retryVoiceConnection);
@@ -933,13 +935,14 @@ function openReport() {
   if (!els.scorecard) return;
   els.scorecard.hidden = false;
   document.body.dataset.report = "open";
+  els.closeReport?.focus();
 }
 
 function closeReport() {
   if (!els.scorecard || els.scorecard.hidden) return;
   els.scorecard.hidden = true;
   document.body.dataset.report = "closed";
-  els.startSession?.focus();
+  (els.viewReport || els.startSession)?.focus();
 }
 
 function handleAppFrameKeydown(event) {

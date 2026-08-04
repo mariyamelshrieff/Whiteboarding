@@ -1165,22 +1165,22 @@ body[data-session="ended"] .statusbar {
 body[data-session="ended"] .scorecard {
   position: fixed !important;
   z-index: 700;
-  top: 186px !important;
+  top: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
-  left: auto !important;
+  left: 0 !important;
   display: block;
-  width: min(480px, 100vw) !important;
+  width: 100vw !important;
   max-width: none !important;
   max-height: none !important;
   margin: 0 !important;
   padding: 0 !important;
   overflow: auto !important;
   border: 0 !important;
-  border-left: 1px solid var(--border-subtle) !important;
+  border-left: 0 !important;
   border-radius: 0 !important;
   background: var(--surface-1) !important;
-  box-shadow: var(--e2) !important;
+  box-shadow: none !important;
 }
 
 .scorecard[hidden] {
@@ -1195,8 +1195,10 @@ body[data-session="ended"] .scorecard {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  min-height: 72px;
-  padding: 12px 16px;
+  width: min(1120px, calc(100% - 48px));
+  min-height: 88px;
+  margin: 0 auto;
+  padding: 16px 0;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-overlay);
   backdrop-filter: blur(20px);
@@ -1274,8 +1276,9 @@ body[data-session="ended"] .scorecard {
 .scorecard > .rubric-disclaimer,
 .scorecard > #scoreRows,
 .scorecard > #nextNotes {
-  margin-right: 16px !important;
-  margin-left: 16px !important;
+  width: min(1040px, calc(100% - 48px));
+  margin-right: auto !important;
+  margin-left: auto !important;
 }
 
 .evaluation-summary {
@@ -1332,7 +1335,7 @@ body[data-session="ended"] .scorecard {
 
 .rubric-group-grid {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   gap: 12px !important;
 }
 
@@ -1497,18 +1500,12 @@ body[data-session="ended"] .setup-controls .shell-select {
   display: none !important;
 }
 
-@media (min-width: 1600px) {
-  .scorecard,
-  body[data-session="ended"] .scorecard {
-    top: 186px !important;
-    right: auto !important;
-    bottom: 32px !important;
-    left: 50% !important;
-    width: 720px !important;
-    border: 1px solid var(--border-subtle) !important;
-    border-radius: var(--r-lg) !important;
-    transform: translateX(-50%);
-  }
+#viewReport {
+  display: none !important;
+}
+
+body[data-session="ended"][data-report="closed"] #viewReport {
+  display: inline-flex !important;
 }
 
 @media (max-width: 1180px) {
@@ -1557,7 +1554,11 @@ body[data-session="ended"] .setup-controls .shell-select {
 
   .scorecard,
   body[data-session="ended"] .scorecard {
-    top: 180px !important;
+    top: 0 !important;
+  }
+
+  .rubric-group-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 }
 
@@ -1574,7 +1575,7 @@ body[data-session="ended"] .setup-controls .shell-select {
 
   .scorecard,
   body[data-session="ended"] .scorecard {
-    top: 180px !important;
+    top: 0 !important;
   }
 
   #shuffleChallenge,
