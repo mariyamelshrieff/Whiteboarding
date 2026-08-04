@@ -1438,13 +1438,65 @@ body[data-session="running"] .statusbar .phase-summary {
   margin-bottom: 24px !important;
 }
 
-#nextNotes .strongest-moment {
-  padding: 16px !important;
-  border-left: 3px solid var(--marker-yellow);
-  color: var(--text-1) !important;
-  font-family: Excalifont, "Comic Sans MS", cursive !important;
-  font-size: 18px !important;
-  line-height: 1.4 !important;
+.report-summary-section {
+  display: grid;
+  gap: 16px;
+  padding-top: 8px;
+}
+
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.report-summary-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--border-subtle);
+  border-left-width: 4px;
+  border-radius: var(--r-lg);
+  font-family: inherit;
+}
+
+.report-summary-card.positive {
+  border-left-color: var(--success);
+  background: color-mix(in srgb, var(--success) 7%, var(--surface-1));
+}
+
+.report-summary-card.improvement {
+  border-left-color: var(--critical);
+  background: color-mix(in srgb, var(--critical) 6%, var(--surface-1));
+}
+
+.report-summary-card h4,
+.report-summary-card p,
+.report-summary-note {
+  margin: 0;
+  font-family: inherit;
+}
+
+.report-summary-card h4 {
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.report-summary-card.positive h4 { color: var(--success); }
+.report-summary-card.improvement h4 { color: var(--critical); }
+
+.report-summary-card p {
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.report-summary-note {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .voice-error,
@@ -1585,6 +1637,10 @@ body[data-session="ended"][data-report="closed"] #viewReport {
 
   .score-row {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .report-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .score-row output {

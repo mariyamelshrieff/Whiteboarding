@@ -3199,11 +3199,11 @@ function renderAiDebrief(evaluation) {
     .filter((row) => !reportGroups.some((group) => group.labels.includes(row.label)))
     .forEach((row) => appendScoreRow(row, els.scoreRows));
   els.nextNotes.innerHTML = "";
-  [
-    evaluation.strongestMoment ? `Strongest moment: ${evaluation.strongestMoment}` : "",
-    evaluation.priorityImprovement ? `Priority improvement: ${evaluation.priorityImprovement}` : "",
-    "This evaluates product reasoning and completeness—not drawing polish. Practice signal, not a prediction."
-  ].filter(Boolean).forEach(appendDebriefNote);
+  renderReportSummary({
+    strongest: evaluation.strongestMoment || "No clear strongest moment was captured in this session.",
+    priority: evaluation.priorityImprovement || "Complete a longer practice session so the report can identify a focused improvement.",
+    note: "This evaluates product reasoning and completeness—not drawing polish. Practice signal, not a prediction."
+  });
   renderTimelineBar();
   renderProcessSection();
   openReport();
@@ -3221,7 +3221,7 @@ function exportReport() {
     `Challenge: ${scenarios[state.scenarioIndex].prompt}`,
     `Duration: ${formatTime(state.elapsed)}`,
     "",
-    ...[...els.scorecard.querySelectorAll("h2, h3, .evaluation-summary, .score-row, #nextNotes .note")]
+    ...[...els.scorecard.querySelectorAll("h2, h3, .evaluation-summary, .score-row, .report-summary-section")]
       .map((node) => node.textContent.replace(/\s+/g, " ").trim())
       .filter(Boolean)
   ].join("\n\n");
@@ -3297,19 +3297,11 @@ function renderDebrief() {
     els.scoreRows.appendChild(div);
   });
   els.nextNotes.innerHTML = "";
-  const summary = document.createElement("div");
-  summary.className = "report-summary";
-  summary.innerHTML = `
-    <span><span class="summary-dot good" aria-hidden="true"></span>${strengths} went well</span>
-    <span><span class="summary-dot improve" aria-hidden="true"></span>${focusAreas} could improve</span>
-  `;
-  els.nextNotes.appendChild(summary);
-  [
-    `Overall leaning: ${leaning.label}. ${leaning.reason}`,
-    scoredRows.length ? `Strongest moment: ${strongestMoment(scoredRows)}` : "",
-    scoredRows.length ? `Priority improvement: ${roundRisk(scoredRows)}` : "",
-    "Practice signal, not a prediction."
-  ].filter(Boolean).forEach((note) => appendDebriefNote(note));
+  renderReportSummary({
+    strongest: scoredRows.length ? strongestMoment(scoredRows) : "No clear strongest moment was captured in this session.",
+    priority: scoredRows.length ? roundRisk(scoredRows) : "Complete a longer practice session to receive focused improvement guidance.",
+    note: `Overall leaning: ${leaning.label}. ${leaning.reason} Practice signal, not a prediction.`
+  });
   renderTimelineBar();
   renderProcessSection();
   openReport();
@@ -3378,6 +3370,42 @@ function appendDebriefNote(note) {
   div.className = `note${note.startsWith("Strongest moment:") ? " strongest-moment" : ""}`;
   div.textContent = note;
   els.nextNotes.appendChild(div);
+}
+
+function renderReportSummary({ strongest, priority, note = "" }) {
+  const section = document.createElement("section");
+  section.className = "report-summary-section";
+  const header = document.createElement("header");
+  header.className = "rubric-group-header";
+  const title = document.createElement("h3");
+  title.textContent = "Summary";
+  const description = document.createElement("p");
+  description.textContent = "What worked and what to focus on in the next practice session.";
+  header.append(title, description);
+
+  const grid = document.createElement("div");
+  grid.className = "report-summary-grid";
+  [
+    { kind: "positive", label: "Strongest moment", body: strongest },
+    { kind: "improvement", label: "Priority improvement", body: priority }
+  ].forEach((item) => {
+    const card = document.createElement("article");
+    card.className = `report-summary-card ${item.kind}`;
+    const heading = document.createElement("h4");
+    heading.textContent = item.label;
+    const copy = document.createElement("p");
+    copy.textContent = item.body;
+    card.append(heading, copy);
+    grid.appendChild(card);
+  });
+  section.append(header, grid);
+  if (note) {
+    const footnote = document.createElement("p");
+    footnote.className = "report-summary-note";
+    footnote.textContent = note;
+    section.appendChild(footnote);
+  }
+  els.nextNotes.appendChild(section);
 }
 
 function addConstraint(text, source = "Constraint") {
