@@ -374,8 +374,10 @@ html[data-theme="dark"] .marker-prompt svg {
   flex: 0 0 auto;
   margin-left: 0 !important;
   padding-inline: 12px !important;
+  border: 1px solid transparent !important;
   background: var(--accent) !important;
   color: var(--on-dark) !important;
+  box-shadow: var(--e1) !important;
 }
 
 #startSession::before {
@@ -1329,14 +1331,17 @@ body[data-session="ended"] .scorecard {
 }
 
 .rubric-group-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
   gap: 12px !important;
 }
 
 .score-row {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) 120px !important;
-  gap: 16px !important;
-  padding: 16px !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  column-gap: 20px !important;
+  row-gap: 12px !important;
+  padding: 20px !important;
   border: 1px solid var(--border-subtle) !important;
   border-radius: var(--r-lg) !important;
   background: var(--surface-1) !important;
@@ -1344,7 +1349,8 @@ body[data-session="ended"] .scorecard {
 }
 
 .score-copy {
-  gap: 8px !important;
+  gap: 12px !important;
+  min-width: 0;
 }
 
 .score-meter {
@@ -1384,30 +1390,35 @@ body[data-session="running"] .statusbar .phase-summary {
 
 .score-title-line strong {
   color: var(--text-1) !important;
-  font-size: 14px !important;
-  line-height: 1.55 !important;
-  font-weight: 600 !important;
+  font-size: 16px !important;
+  line-height: 1.35 !important;
+  font-weight: 650 !important;
 }
 
 .score-copy > span:not(.score-evidence) {
   max-width: 68ch;
   color: var(--text-2) !important;
-  font-size: 13px !important;
-  line-height: 1.55 !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
 }
 
 .score-evidence {
   max-width: 68ch;
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
   color: var(--text-3) !important;
-  font-size: 12px !important;
-  line-height: 1.5 !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
 }
 
 .score-row output {
   grid-column: 2 !important;
   grid-row: 1 !important;
   justify-self: end;
-  width: 120px;
+  width: auto;
+  min-width: 56px;
+  padding: 6px 10px !important;
   color: var(--caution) !important;
   background: color-mix(in srgb, var(--caution) 12%, transparent) !important;
   text-align: center;
@@ -1471,13 +1482,19 @@ body[data-session="ended"] .topbar {
 
 body[data-session="ended"] .session-controls #drawerToggle,
 body[data-session="ended"] .session-controls #themeToggle,
+body[data-session="ended"] .session-controls #shuffleChallenge,
 body[data-session="ended"] .session-controls #startSession {
   display: inline-flex !important;
 }
 
+body[data-session="ended"] .session-controls > .setup-controls,
 body[data-session="ended"] .session-controls > .workspace-controls,
 body[data-session="ended"] .session-controls > .session-actions {
   display: flex !important;
+}
+
+body[data-session="ended"] .setup-controls .shell-select {
+  display: none !important;
 }
 
 @media (min-width: 1600px) {

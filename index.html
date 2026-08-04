@@ -93,20 +93,10 @@
           <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#play"></use></svg>
           <span id="capsuleStartLabel">Start practice</span>
         </button>
-        <div class="phase-summary">
-          <div class="phase-chip">
-            <svg class="shell-icon" aria-hidden="true"><use href="./lucide-sprite.svg#circle"></use></svg>
-            <strong id="phaseName">Not started</strong>
-          </div>
-          <span id="phaseHint"></span>
-          <span id="micHelp" class="mic-help"></span>
-        </div>
+        <strong id="phaseName" class="sr-only">Not started</strong>
+        <span id="phaseHint" class="sr-only"></span>
+        <span id="micHelp" class="sr-only"></span>
         <section class="listening-panel" aria-label="Listening status">
-          <div class="listening-indicator" aria-hidden="true" title="Voice connection activity">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
           <div>
             <strong id="listeningTitle">Not listening yet</strong>
             <p id="heardPreview">Start the session to open the microphone. Your spoken questions and narration will appear here.</p>
@@ -267,7 +257,7 @@
     <script src="./score-status.js?v=1"></script>
   <script src="./scene-analysis.js?v=2"></script>
     <script src="./turn-policy.js?v=1"></script>
-  <script src="./app.js?v=30"></script>
+  <script src="./app.js?v=31"></script>
   <script type="module" src="./excalidraw-board.js?v=5"></script>
   </body>
 </html>

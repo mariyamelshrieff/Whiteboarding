@@ -1948,6 +1948,8 @@ function nextUnaddressedEdgeCase() {
 function shouldKeepTranscription(text, event = {}) {
   const normalized = text.toLowerCase().trim();
   const words = getWords(normalized);
+  const nonSpeechOnly = /^(?:[\[(]?\s*)?(?:typing|keyboard(?: sounds?)?|key(?:board)? clicks?|clicking|sigh(?:s|ing)?|breath(?:e|es|ing)?|sniff(?:s|ing)?|cough(?:s|ing)?|clears? throat|background noise|silence|music|applause)(?:\s*[\])]?|[.!…])*$/i;
+  if (nonSpeechOnly.test(normalized)) return false;
   if (event.confidence != null && event.confidence < 0.55) return false;
   if (event.language && !String(event.language).toLowerCase().startsWith("en")) return false;
   if (words.length < 3 && !hasDirectQuestionIntent(normalized) && !shouldInterviewerRespondTo(normalized)) return false;
@@ -3211,9 +3213,6 @@ function appendScoreRow(row, container = els.scoreRows) {
   titleLine.className = "score-title-line";
   const title = document.createElement("strong");
   title.textContent = row.label || "Rubric area";
-  const badge = document.createElement("span");
-  badge.className = "score-status";
-  badge.textContent = status.label;
   const note = document.createElement("span");
   note.textContent = row.rationale || row.feedback || row.note || "";
   const evidence = document.createElement("span");
@@ -3230,7 +3229,7 @@ function appendScoreRow(row, container = els.scoreRows) {
   const output = document.createElement("output");
   output.setAttribute("aria-label", `${title.textContent} score ${score} out of 5`);
   output.textContent = `${score}/5`;
-  titleLine.append(title, badge);
+  titleLine.append(title);
   copy.append(titleLine, meter, note, evidence);
   div.append(dot, copy, output);
   container.appendChild(div);
