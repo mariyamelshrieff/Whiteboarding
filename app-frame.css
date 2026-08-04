@@ -46,7 +46,7 @@ html[data-theme="dark"] {
   grid-row: 1;
   display: grid !important;
   grid-template-columns: auto minmax(0, 1fr) !important;
-  grid-template-rows: 36px 36px auto !important;
+  grid-template-rows: 36px auto auto !important;
   align-items: center !important;
   justify-content: flex-start !important;
   min-width: 0;
@@ -67,7 +67,7 @@ html[data-theme="dark"] {
 }
 
 .brand-lockup {
-  grid-column: 1;
+  grid-column: 1 / -1;
   grid-row: 1;
   display: flex !important;
   align-items: center;
@@ -75,6 +75,7 @@ html[data-theme="dark"] {
   flex: 0 0 auto;
   min-height: 36px;
   margin: 0 !important;
+  justify-self: center;
   color: var(--text-1) !important;
   font-size: 15px !important;
   line-height: 1.4 !important;
@@ -91,20 +92,22 @@ html[data-theme="dark"] {
   width: 32px !important;
   height: 32px !important;
   border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
+  border-radius: 44% 56% 48% 52% / 52% 44% 56% 48% !important;
+  background: var(--accent-subtle) !important;
   color: var(--accent) !important;
   place-items: center;
+  transform: rotate(-3deg);
 }
 
 html[data-theme="dark"] .brand-mark {
-  background: transparent !important;
+  background: color-mix(in srgb, var(--accent) 18%, transparent) !important;
   color: var(--accent) !important;
 }
 
 .brand-mark svg {
   width: 22px;
   height: 22px;
+  transform: rotate(3deg);
 }
 
 .challenge-context {
@@ -237,7 +240,9 @@ html[data-theme="dark"] .marker-prompt svg {
   align-self: center !important;
   justify-self: auto !important;
   overflow: visible !important;
+  padding-top: 12px;
   gap: 8px !important;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .session-controls .control-group {
@@ -1515,7 +1520,7 @@ body[data-session="ended"] .session-controls > .session-actions {
 
   .topbar,
   body[data-session="ended"] .topbar {
-    grid-template-rows: 36px 36px auto !important;
+    grid-template-rows: 36px auto auto !important;
     min-height: 180px !important;
     height: auto !important;
   }

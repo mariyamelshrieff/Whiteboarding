@@ -55,7 +55,8 @@ Do not put an OpenAI API key in any browser file.
 The app is designed so the browser calls `/token`, and the server creates a short-lived Realtime client secret. The actual `OPENAI_API_KEY` stays server-side:
 
 - Local development: `server.mjs`
-- Vercel deployment: `api/token.js`
+- Render deployment: `server.mjs`
+- Legacy Vercel deployment: `api/token.js`
 
 `.gitignore` excludes `.env`, `.env.local`, `.vercel`, `node_modules`, and local scratch/output folders.
 
@@ -87,7 +88,30 @@ OPENAI_EVALUATION_MODEL=gpt-5-mini
 PORT=4173
 ```
 
-## Deploy To Vercel
+## Deploy To Render
+
+The repository includes a `render.yaml` Blueprint for a Render Node web service.
+
+1. Push the repository to GitHub.
+2. In Render, choose **New > Blueprint** and select the repository.
+3. Render detects `render.yaml` and creates the `whiteboard-interview-simulator` service.
+4. Add the required secret when prompted:
+
+```sh
+OPENAI_API_KEY=your_key_here
+```
+
+Optional Render environment variables:
+
+```sh
+OPENAI_REALTIME_MODEL=gpt-realtime-2
+OPENAI_REALTIME_VOICE=marin
+OPENAI_EVALUATION_MODEL=gpt-5-mini
+```
+
+Render runs `npm run render-build`, starts the app with `npm start`, and checks `/health`. The server binds to Render's `PORT` on `0.0.0.0`.
+
+## Legacy Vercel Deployment
 
 This repo deploys as a static frontend plus one serverless token endpoint.
 
@@ -122,7 +146,8 @@ OPENAI_EVALUATION_MODEL=gpt-5-mini
 ├── evaluation.mjs         # Shared server-side evaluation logic and rubric
 ├── excalidraw-board.js    # Excalidraw mount/bridge
 ├── index.html             # App shell
-├── server.mjs             # Local static server and server-only API endpoints
+├── render.yaml            # Render Blueprint configuration
+├── server.mjs             # Render/local static server and API endpoints
 ├── styles.css             # Material-inspired UI styles
 ├── vercel.json            # Vercel rewrite and permissions policy
 └── package.json           # Deployment metadata

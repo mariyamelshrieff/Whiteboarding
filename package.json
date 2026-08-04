@@ -6,6 +6,7 @@
     "start": "node server.mjs",
     "test": "node --test",
     "test:evaluation": "node --test test/evaluation-golden.test.mjs",
+    "render-build": "echo 'Render uses the repository directly; no build step required'",
     "vercel-build": "echo 'Static app: no build step required'"
   },
   "engines": {

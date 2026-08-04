@@ -7,7 +7,7 @@ const root = process.cwd();
 loadLocalEnv();
 
 const port = Number(process.env.PORT || 4173);
-const host = process.env.HOST || "127.0.0.1";
+const host = process.env.HOST || "0.0.0.0";
 const model = process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2";
 const voice = process.env.OPENAI_REALTIME_VOICE || "marin";
 
@@ -25,6 +25,10 @@ const mimeTypes = {
 createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host}`);
+    if (url.pathname === "/health") {
+      sendJson(response, 200, { status: "ok" });
+      return;
+    }
     if (url.pathname === "/token") {
       await createRealtimeToken(request, response);
       return;
