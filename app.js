@@ -444,6 +444,7 @@ const state = {
   started: false,
   ended: false,
   transcript: [],
+  publicTrialId: "",
   runningSummary: "",
   reasoningMemory: createEmptyReasoningMemory(),
   questionMemory: { askedProbeIds: [], coveredTopicIds: [], incompleteTopicIds: [], askedQuestions: [], pendingProbeId: "" },
@@ -992,6 +993,7 @@ function startSession() {
   if (els.askExplainer) els.askExplainer.hidden = true;
   if (state.ended) resetSession();
   state.started = true;
+  state.publicTrialId = globalThis.crypto?.randomUUID?.() || `trial_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   state.ended = false;
   state.lastPhaseChangeAt = 0;
   state.phaseHistory = [{ id: currentPhase().id, label: currentPhase().label, startedAt: 0, endedAt: null }];
@@ -1054,6 +1056,7 @@ function resetSession() {
     started: false,
     ended: false,
     transcript: [],
+    publicTrialId: "",
     runningSummary: "",
     reasoningMemory: createEmptyReasoningMemory(),
     questionMemory: window.WhiteboardTurnPolicy.createQuestionMemory(),
@@ -1410,7 +1413,7 @@ async function connectRealtime(runId) {
   const tokenResponse = await fetch("/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instructions: realtimeInstructions() })
+    body: JSON.stringify({ instructions: realtimeInstructions(), trialId: state.publicTrialId })
   });
   if (!tokenResponse.ok) {
     const data = await safeJson(tokenResponse);
@@ -3065,6 +3068,8 @@ function currentTranscriptText() {
 
 function realtimeErrorMessage(error) {
   const message = error?.message || "";
+  if (/all 3 free interview trials/i.test(message)) return message;
+  if (/public AI interview credits are temporarily used up/i.test(message)) return message;
   if (message.includes("Permission") || message.includes("NotAllowedError")) return "Microphone permission was blocked. Allow mic access, then restart the session.";
   if (message.includes("OPENAI_API_KEY")) return "Add OPENAI_API_KEY to a local .env file, then restart the server. The key stays server-side.";
   if (message.includes("404")) return "Voice server is not running. Start the local app server with OPENAI_API_KEY.";
@@ -3607,7 +3612,8 @@ async function showDebrief() {
         elapsedMs: state.elapsed,
         company: selectedCompany(),
         voiceAttempted: true,
-        canvasCheckpoints: state.canvasCheckpoints
+        canvasCheckpoints: state.canvasCheckpoints,
+        trialId: state.publicTrialId
       })
     });
     const payload = await response.json().catch(() => ({}));
@@ -3950,6 +3956,7 @@ function saveSessionSnapshot() {
     companies: state.companies,
     mode: state.mode,
     started: state.started,
+    publicTrialId: state.publicTrialId,
     elapsed: state.elapsed,
     phaseIndex: state.phaseIndex,
     phaseElapsed: state.phaseElapsed,
@@ -4002,6 +4009,7 @@ function offerResumeIfAvailable() {
     mode: snapshot.mode || state.mode,
     started: true,
     ended: false,
+    publicTrialId: snapshot.publicTrialId || (globalThis.crypto?.randomUUID?.() || `trial_${Date.now()}_${Math.random().toString(36).slice(2)}`),
     elapsed: snapshot.elapsed || 0,
     phaseIndex: snapshot.phaseIndex || 0,
     phaseElapsed: snapshot.phaseElapsed || 0,

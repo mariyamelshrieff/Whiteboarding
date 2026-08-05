@@ -2,6 +2,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { evaluateSession } from "./evaluation.mjs";
+import { PUBLIC_TRIAL_LIMIT, evaluatedTrialCookie, evaluationTrialAccess, trialAccess, trialCookie } from "./public-trials.mjs";
 
 const root = process.cwd();
 loadLocalEnv();
@@ -61,6 +62,19 @@ async function createRealtimeToken(request, response) {
   }
 
   const body = await readJson(request);
+  const trialSecret = process.env.TRIAL_SIGNING_SECRET || process.env.OPENAI_API_KEY;
+  const access = trialAccess(request.headers.cookie, body.trialId, trialSecret);
+  if (!access.allowed) {
+    if (access.reason === "limit") {
+      sendJson(response, 403, {
+        code: "TRIAL_LIMIT_REACHED",
+        error: `You’ve used all ${PUBLIC_TRIAL_LIMIT} free interview trials on this browser. The whiteboard remains available, but AI voice and evaluation are disabled.`
+      });
+      return;
+    }
+    sendJson(response, 400, { code: "INVALID_TRIAL", error: "This interview trial could not be started. Refresh the page and try again." });
+    return;
+  }
   const apiResponse = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
@@ -92,9 +106,17 @@ async function createRealtimeToken(request, response) {
 
   const text = await apiResponse.text();
   if (!apiResponse.ok) {
-    sendJson(response, apiResponse.status, { error: text });
+    if (isOpenAiCreditError(text)) {
+      sendJson(response, 402, {
+        code: "PUBLIC_CREDITS_EXHAUSTED",
+        error: "The public AI interview credits are temporarily used up. You can still use the whiteboard, but voice and AI evaluation are unavailable right now."
+      });
+      return;
+    }
+    sendJson(response, apiResponse.status, { error: "The AI interviewer could not connect. Please try again shortly." });
     return;
   }
+  if (!access.existing) response.setHeader("Set-Cookie", trialCookie(access.used, body.trialId, trialSecret, access.evaluated));
   response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
   response.end(text);
 }
@@ -106,13 +128,37 @@ async function createEvaluation(request, response) {
   }
   try {
     const body = await readJson(request, 4 * 1024 * 1024);
+    const trialSecret = process.env.TRIAL_SIGNING_SECRET || process.env.OPENAI_API_KEY;
+    const access = evaluationTrialAccess(request.headers.cookie, body.trialId, trialSecret);
+    if (!access.allowed) {
+      const alreadyEvaluated = access.reason === "already-evaluated";
+      sendJson(response, alreadyEvaluated ? 409 : 403, {
+        code: alreadyEvaluated ? "TRIAL_ALREADY_EVALUATED" : "TRIAL_REQUIRED",
+        error: alreadyEvaluated
+          ? "This trial has already received its AI evaluation. Start another trial to receive a new report."
+          : "An active public interview trial is required for AI evaluation."
+      });
+      return;
+    }
     const evaluation = await evaluateSession(body);
+    response.setHeader("Set-Cookie", evaluatedTrialCookie(request.headers.cookie, body.trialId, trialSecret));
     response.setHeader("Cache-Control", "no-store");
     sendJson(response, 200, evaluation);
   } catch (error) {
     console.error("Evaluation failed:", error);
+    if (isOpenAiCreditError(error.message)) {
+      sendJson(response, 402, {
+        code: "PUBLIC_CREDITS_EXHAUSTED",
+        error: "The public AI evaluation credits are temporarily used up. Your practice is saved, so the app is showing an on-device summary instead."
+      });
+      return;
+    }
     sendJson(response, error.status || 500, { error: error.message || "The session could not be evaluated." });
   }
+}
+
+function isOpenAiCreditError(value) {
+  return /insufficient_quota|billing hard limit|billing quota|credit balance|exceeded your current quota/i.test(String(value || ""));
 }
 
 async function createFeedback(request, response) {

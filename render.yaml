@@ -18,3 +18,5 @@ services:
         value: marin
       - key: OPENAI_EVALUATION_MODEL
         value: gpt-5-mini
+      - key: TRIAL_SIGNING_SECRET
+        generateValue: true
