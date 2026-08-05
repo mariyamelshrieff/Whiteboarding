@@ -28,3 +28,10 @@ test("short repeat requests replay the previous interviewer answer", () => {
 test("a transcript-less opening cannot swallow the next interviewer answer", () => {
   assert.match(source, /if \(wasOpeningResponse\) state\.skipNextInterviewerTranscript = false;/);
 });
+
+test("the interviewer cannot transcribe or interrupt its own spoken prompt", () => {
+  assert.match(source, /if \(candidateAudioIsSuppressed\(\) \|\| isLikelyInterviewerEcho\(text\)\)/);
+  assert.match(source, /state\.interviewerPlaybackGuardUntil = Math\.max/);
+  assert.match(source, /const overlap = shared \/ Math\.min\(captured\.size, interviewer\.size\)/);
+  assert.match(source, /rememberInterviewerPlayback\(text\);[\s\S]*?new SpeechSynthesisUtterance/);
+});

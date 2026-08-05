@@ -1163,6 +1163,7 @@ body[data-session="ended"] .statusbar {
 
 .scorecard,
 body[data-session="ended"] .scorecard {
+  --report-content-width: 1120px;
   position: fixed !important;
   z-index: 700;
   top: 0 !important;
@@ -1195,7 +1196,7 @@ body[data-session="ended"] .scorecard {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  width: min(1120px, calc(100% - 48px));
+  width: min(var(--report-content-width), calc(100% - 48px));
   min-height: 88px;
   margin: 0 auto;
   padding: 16px 0;
@@ -1276,29 +1277,27 @@ body[data-session="ended"] .scorecard {
 .scorecard > .rubric-disclaimer,
 .scorecard > #scoreRows,
 .scorecard > #nextNotes {
-  width: min(1040px, calc(100% - 48px));
+  width: min(var(--report-content-width), calc(100% - 48px));
+  max-width: none !important;
   margin-right: auto !important;
   margin-left: auto !important;
 }
 
 .evaluation-summary {
-  max-width: 68ch;
-  margin-top: 16px !important;
-  padding: 12px !important;
-  border-radius: var(--r-md) !important;
-  background: var(--surface-2) !important;
-  color: var(--text-2) !important;
-  font-size: 14px !important;
-  line-height: 1.55 !important;
+  display: none !important;
+  max-width: none !important;
 }
 
 .rubric-disclaimer {
-  max-width: 68ch;
-  margin-top: 12px !important;
-  padding: 0 !important;
+  max-width: none !important;
+  margin-top: 16px !important;
+  padding: 10px 12px !important;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
   color: var(--text-3) !important;
   font-size: 12px !important;
-  line-height: 1.5 !important;
+  line-height: 1.4 !important;
 }
 
 #scoreRows {
@@ -1415,6 +1414,19 @@ body[data-session="running"] .statusbar .phase-summary {
   line-height: 1.55 !important;
 }
 
+.score-evidence summary {
+  width: fit-content;
+  color: var(--text-2);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.score-evidence p {
+  margin: 10px 0 0;
+  color: var(--text-3);
+  font: inherit;
+}
+
 .score-row output {
   grid-column: 2 !important;
   grid-row: 1 !important;
@@ -1441,7 +1453,8 @@ body[data-session="running"] .statusbar .phase-summary {
 .report-summary-section {
   display: grid;
   gap: 16px;
-  padding-top: 8px;
+  padding: 24px 0 8px;
+  border-top: 1px solid var(--border-strong);
 }
 
 .report-summary-grid {
@@ -1454,7 +1467,7 @@ body[data-session="running"] .statusbar .phase-summary {
   display: grid;
   gap: 8px;
   min-width: 0;
-  padding: 20px;
+  padding: 18px 20px;
   border: 1px solid var(--border-subtle);
   border-left-width: 4px;
   border-radius: var(--r-lg);
@@ -1490,7 +1503,7 @@ body[data-session="running"] .statusbar .phase-summary {
 .report-summary-card p {
   color: var(--text-2);
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
 .report-summary-note {

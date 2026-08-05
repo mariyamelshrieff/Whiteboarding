@@ -28,3 +28,31 @@ test("chooses an unaddressed resilience edge case", () => {
   assert.equal(edgeCase.id, "permissions");
   assert.match(edgeCase.probe, /permission/i);
 });
+
+test("never repeats an edge-case probe the interviewer already asked", () => {
+  const transcript = [
+    { role: "interviewer", text: "How does the flow handle multiple events happening at the same time?" },
+    { role: "candidate", text: "I would queue and prioritize them." }
+  ];
+  const edgeCase = nextUnaddressedEdgeCase({ boardSummary: "", transcript });
+  assert.notEqual(edgeCase?.id, "concurrent-incidents");
+});
+
+test("returns no probe after every edge case has been asked or addressed", () => {
+  const transcript = [
+    { role: "interviewer", text: "How do concurrent events work with missing telemetry and permissions?" }
+  ];
+  assert.equal(nextUnaddressedEdgeCase({ boardSummary: "", transcript }), null);
+});
+
+test("uses AI-explanation edge cases instead of incident probes", () => {
+  const first = nextUnaddressedEdgeCase({ boardSummary: "", transcript: [], scenarioId: "ai-explanations" });
+  assert.equal(first.id, "conflicting-suggestions");
+  assert.match(first.probe, /AI suggestions conflict/i);
+  const second = nextUnaddressedEdgeCase({
+    boardSummary: "",
+    scenarioId: "ai-explanations",
+    transcript: [{ role: "interviewer", text: first.probe }]
+  });
+  assert.equal(second.id, "missing-evidence");
+});

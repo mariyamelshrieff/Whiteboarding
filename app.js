@@ -196,11 +196,11 @@ const scenarios = [
     prompt: "Design a reusable component for AI explanations.",
     truth: {
       object: "A pattern for explaining AI output, confidence, sources, and user controls.",
-      who: "Users reviewing AI suggestions in productivity and enterprise tools.",
-      platform: "Reusable component across web product surfaces.",
+      who: "Knowledge workers reviewing AI suggestions while writing, researching, or making decisions in productivity tools.",
+      platform: "A reusable web component embedded in productivity tools.",
       goal: "Help users decide whether to trust, inspect, accept, edit, or reject AI output.",
       constraint: "Too much explanation creates clutter; too little explanation erodes trust.",
-      curveball: "Curveball: the explanation must work for both expert admins and first-time users."
+      curveball: "Curveball: some suggestions are high impact but arrive without a complete source citation."
     }
   }
 ];
@@ -225,12 +225,14 @@ const phasePlans = {
 };
 
 const frameworkSteps = [
-  { id: "frame", label: "Goals & constraints" },
-  { id: "user", label: "User & empathy" },
-  { id: "flow", label: "Journey / flow" },
-  { id: "system", label: "System tradeoffs" },
-  { id: "wire", label: "Wire-level sketch" },
-  { id: "validate", label: "Metrics & risks" }
+  { id: "clarify-problem", label: "Clarify the problem" },
+  { id: "define-success", label: "Define success" },
+  { id: "identify-users", label: "Identify users" },
+  { id: "map-journey", label: "Map the journey" },
+  { id: "prioritize-problem", label: "Prioritize one problem" },
+  { id: "ideate", label: "Ideate" },
+  { id: "design-flow", label: "Design the end-to-end flow" },
+  { id: "edge-cases", label: "Discuss edge cases" }
 ];
 
 const challengeFamilies = {
@@ -496,6 +498,8 @@ const state = {
   realtimeConnecting: false,
   realtimeResponseActive: false,
   realtimeResponseRequested: false,
+  interviewerPlaybackGuardUntil: 0,
+  lastInterviewerSpeechText: "",
   localStream: null,
   remoteStream: null,
   remoteAudio: null,
@@ -514,6 +518,7 @@ const state = {
   evaluating: false,
   shownNudges: new Set(),
   activeNudge: "",
+  progressionProbeCounts: {},
   canvasCheckpoints: [],
   lastCheckpointAt: -20000,
   insertBoardTemplate: null,
@@ -1085,6 +1090,7 @@ function resetSession() {
     firstBoardNudgeAt: 0,
     shownNudges: new Set(),
     activeNudge: "",
+    progressionProbeCounts: {},
     canvasCheckpoints: [],
     lastCheckpointAt: -20000,
     voiceRunId: state.voiceRunId,
@@ -1203,7 +1209,7 @@ function updateEvaluationIdentity() {
   const company = selectedCompany();
   if (els.evaluationRubricLabel) els.evaluationRubricLabel.textContent = `${company} rubric`;
   if (els.rubricDisclaimer) {
-    els.rubricDisclaimer.textContent = `Practice rubric based on publicly available ${company} product-design interview signals. Not affiliated with ${company} and not an official hiring scorecard.`;
+    els.rubricDisclaimer.textContent = `Practice feedback only. Based on public ${company} product-design interview guidance—not an official ${company} assessment.`;
   }
 }
 
@@ -1485,7 +1491,7 @@ function handleRealtimeEvent(message) {
   if (event.type === "input_audio_buffer.speech_started") {
     // Ignore echo/noise detected while the interviewer is answering. The mic
     // is paused for responses, but a buffered VAD event can still arrive.
-    if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
+    if (candidateAudioIsSuppressed()) return;
     clearNoSpeechTimer();
     beginSpeechCapture();
     state.lastCandidateAt = Date.now();
@@ -1495,7 +1501,7 @@ function handleRealtimeEvent(message) {
     return;
   }
   if (event.type === "input_audio_buffer.speech_stopped") {
-    if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
+    if (candidateAudioIsSuppressed()) return;
     state.interimText = "";
     scheduleSpeechCaptureFailure();
     setListeningState("listening", "Interviewer listening", "I heard you. I will stay quiet unless you ask the interviewer directly.");
@@ -1503,8 +1509,13 @@ function handleRealtimeEvent(message) {
     return;
   }
   if (event.type === "conversation.item.input_audio_transcription.completed") {
-    if (state.realtimeResponseActive || state.realtimeResponseRequested) return;
     const text = event.transcript?.trim();
+    if (candidateAudioIsSuppressed() || isLikelyInterviewerEcho(text)) {
+      clearSpeechCaptureTracking();
+      state.interimText = "";
+      renderLiveTranscript();
+      return;
+    }
     const questionWasArmed = clearSpeechCaptureTracking();
     state.interimText = "";
     const transcriptIsUsable = text && shouldKeepTranscription(text, event);
@@ -1570,7 +1581,8 @@ function handleRealtimeEvent(message) {
     state.realtimeResponseRequested = false;
     const finalText = extractRealtimeResponseText(event) || state.interviewerDraft;
     if (finalText.trim()) {
-      const text = sanitizeInterviewerText(finalText.trim());
+      const text = ensureNovelInterviewerResponse(sanitizeInterviewerText(finalText.trim()), responseMeta?.fallbackText);
+      rememberInterviewerPlayback(text);
       if (wasOpeningResponse) {
         const draft = els.interviewerLog.querySelector("[data-draft='true']");
         if (draft) draft.remove();
@@ -1724,11 +1736,14 @@ function updateRunningSummary() {
   if (state.revealed.has("who")) facts.push("user/context clarified");
   if (state.revealed.has("goal")) facts.push("goal clarified");
   if (state.revealed.has("constraint")) facts.push("constraint clarified");
-  if (frameworkStepHasEvidence("frame")) facts.push("candidate framed the problem");
-  if (frameworkStepHasEvidence("user")) facts.push("candidate named users or context");
-  if (frameworkStepHasEvidence("flow")) facts.push("candidate discussed flow/journey");
-  if (frameworkStepHasEvidence("wire")) facts.push("candidate has board structure or wire-level sketching");
-  if (frameworkStepHasEvidence("validate")) facts.push("candidate mentioned metrics/validation");
+  if (frameworkStepHasEvidence("clarify-problem")) facts.push("candidate clarified the problem");
+  if (frameworkStepHasEvidence("define-success")) facts.push("candidate defined success");
+  if (frameworkStepHasEvidence("identify-users")) facts.push("candidate named users or context");
+  if (frameworkStepHasEvidence("map-journey")) facts.push("candidate discussed the current journey");
+  if (frameworkStepHasEvidence("prioritize-problem")) facts.push("candidate prioritized one problem");
+  if (frameworkStepHasEvidence("ideate")) facts.push("candidate explored multiple directions");
+  if (frameworkStepHasEvidence("design-flow")) facts.push("candidate designed an end-to-end flow");
+  if (frameworkStepHasEvidence("edge-cases")) facts.push("candidate discussed edge cases");
   const assumptionPhrases = extractSummaryPhrases(candidateText, ["assume", "assuming", "scope", "goal", "user", "because"]).slice(-3);
   const constraints = state.constraints.slice(0, 3).map((item) => item.text);
   const assumptions = state.assumptions.slice(0, 3).map((item) => item.invalidated ? `${item.text} (invalidated)` : item.text);
@@ -1776,6 +1791,29 @@ function recentTranscriptWindow(windowMs = 2 * 60 * 1000) {
     .slice(-12)
     .map((turn) => `${turn.role}: ${turn.text}`)
     .join(" / ");
+}
+
+function establishedContextForPrompt() {
+  const scenario = scenarios[state.scenarioIndex];
+  const revealedFacts = (scenario.hiddenContext || [])
+    .filter((fact) => state.revealed.has(fact.key))
+    .map((fact) => `${fact.key}: ${fact.text}`);
+  const durableInterviewerAnswers = state.transcript
+    .filter((turn) => turn.role === "interviewer" && String(turn.text || "").trim() && !String(turn.text).trim().endsWith("?"))
+    .map((turn) => String(turn.text).trim())
+    .filter((text, index, values) => values.indexOf(text) === index)
+    .slice(-8);
+  const activeAssumptions = state.assumptions
+    .filter((assumption) => !assumption.invalidated)
+    .slice(0, 5)
+    .map((assumption) => assumption.text);
+  const pinnedConstraints = state.constraints.slice(0, 5).map((constraint) => constraint.text);
+  return [
+    revealedFacts.length ? `Established challenge facts: ${revealedFacts.join(" | ")}` : "Established challenge facts: none revealed yet.",
+    durableInterviewerAnswers.length ? `Prior interviewer answers, binding for this session: ${durableInterviewerAnswers.join(" | ")}` : "Prior interviewer answers: none yet.",
+    activeAssumptions.length ? `Candidate commitments: ${activeAssumptions.join(" | ")}` : "Candidate commitments: none yet.",
+    pinnedConstraints.length ? `Active constraints: ${pinnedConstraints.join(" | ")}` : "Active constraints: none yet."
+  ].join("\n");
 }
 
 function rememberRealtimeItem(itemId, role) {
@@ -1942,6 +1980,17 @@ function routeCandidateTurn(text, options = {}) {
     return;
   }
 
+  const progressionProbe = nextProgressionProbe(text);
+  if (progressionProbe) {
+    const requested = options.local ? false : requestRealtimeResponse(responseInstructionFor(text, { progressionProbe }), {
+      force: true,
+      questionText: text,
+      fallbackText: progressionProbe
+    });
+    if (!requested) respond(progressionProbe, false, { force: true, localVoice: true });
+    return;
+  }
+
   if (options.local) setSilent();
   else setInterviewerState("Listening");
 }
@@ -1959,11 +2008,78 @@ function consecutiveCandidateTurns() {
 
 function requiredFollowUpProbe(text) {
   if (!window.WhiteboardTurnPolicy.shouldForceFollowUp({ text, phaseId: currentPhase().id, transcript: state.transcript })) return "";
-  return nextUnaddressedEdgeCase().probe;
+  const stepId = currentFrameworkStep().id;
+  if (["design-flow", "edge-cases"].includes(stepId)) return nextUnaddressedEdgeCase()?.probe || nextProgressionProbe(text, { force: true });
+  return nextProgressionProbe(text, { force: true });
 }
 
 function nextUnaddressedEdgeCase() {
-  return window.WhiteboardTurnPolicy.nextUnaddressedEdgeCase({ boardSummary: state.boardSummary, transcript: state.transcript });
+  return window.WhiteboardTurnPolicy.nextUnaddressedEdgeCase({
+    boardSummary: state.boardSummary,
+    transcript: state.transcript,
+    scenarioId: scenarios[state.scenarioIndex].id
+  });
+}
+
+function nextProgressionProbe(text, options = {}) {
+  const words = getWords(String(text || ""));
+  if ((!options.force && words.length < 8) || requestQuietTime(text) || isRepeatRequest(text)) return "";
+  const step = currentFrameworkStep();
+  const currentCount = Number(state.progressionProbeCounts[step.id] || 0);
+  if (currentCount >= 4) return "";
+  const probes = {
+    "clarify-problem": [
+      "What assumption in your problem framing is most important to verify?",
+      "What evidence would show that you framed the wrong problem?",
+      "What part of the prompt are you deliberately excluding from your scope?",
+      "What would have to be true for this problem to be worth solving now?"
+    ],
+    "define-success": [
+      "Which single outcome matters most, and why?",
+      "What guardrail would prevent that success metric from creating harm?",
+      "How would you distinguish meaningful success from short-term engagement?",
+      "What observable behavior would tell you the outcome improved?"
+    ],
+    "identify-users": [
+      "Whose need is most urgent in this challenge, and what makes it urgent?",
+      "What user behavior or context could invalidate that choice?",
+      "Who is affected by this experience but is not the primary user?",
+      "What does your primary user know at this moment that others may not?"
+    ],
+    "map-journey": [
+      "Where in the current journey does the largest unmet need occur?",
+      "What evidence makes that moment more important than the others?",
+      "What happens immediately before the moment you want to change?",
+      "Where does the user currently lose confidence or momentum?"
+    ],
+    "prioritize-problem": [
+      "Which one problem will you solve first, and what are you deliberately leaving out?",
+      "What would change your prioritization decision?",
+      "Which user harm becomes acceptable because of this prioritization?",
+      "What criterion separates your top problem from the runner-up?"
+    ],
+    ideate: [
+      "What meaningfully different approaches could solve that same prioritized problem?",
+      "What tradeoff separates your strongest direction from the alternatives?",
+      "Which concept tests the riskiest assumption most directly?",
+      "What would a deliberately lower-complexity approach sacrifice?"
+    ],
+    "design-flow": [
+      "What decision does the user make at the first critical step?",
+      "Where could the end-to-end flow fail to support the outcome you defined?",
+      "What information must persist as the user moves through this flow?",
+      "Where does the system need to explain, confirm, or recover?"
+    ],
+    "edge-cases": [
+      "Which failure mode creates the greatest user harm?",
+      "How would the user recover while preserving trust and control?",
+      "What happens when the system has incomplete or conflicting information?",
+      "Which edge case would you test before launch, and why?"
+    ]
+  };
+  const probe = probes[step.id]?.[currentCount] || "";
+  if (probe) state.progressionProbeCounts[step.id] = currentCount + 1;
+  return probe;
 }
 
 function shouldKeepTranscription(text, event = {}) {
@@ -1997,8 +2113,17 @@ function lastInterviewerTurnText() {
 
 function responseInstructionFor(text, options = {}) {
   const phase = currentPhase();
-  const base = `Respond to the candidate's latest turn only: "${text}".\n${phasePromptContext()}`;
-  const common = "Speak like a real interviewer: brief, curious, never lecturing. One question or one comment, under 30 words. Do not explain the rubric. Never reveal hidden context unprompted. Reference the board only through the structured state.";
+  const structuredStep = currentFrameworkStep();
+  const structuredStepIndex = frameworkSteps.findIndex((step) => step.id === structuredStep.id);
+  const nextStructuredStep = frameworkSteps[Math.min(frameworkSteps.length - 1, structuredStepIndex + 1)];
+  const socialCueContext = window.WhiteboardSocialCuePolicy?.socialCuePrompt(text)
+    || "Do not infer emotion or personality from the candidate's voice, silence, or wording.";
+  const recentQuestions = recentInterviewerQuestions();
+  const base = `Respond to the candidate's latest turn only: "${text}".\n${phasePromptContext()}\nCurrent structured section: ${structuredStep.label}. Next section: ${nextStructuredStep.label}. Keep the conversation on the current section until there is concrete evidence for it. When the candidate has covered it, explicitly name the next section once and ask one opening question for that section.\nRecent interviewer questions—do not repeat or lightly paraphrase any of these: ${recentQuestions.length ? recentQuestions.map((question) => JSON.stringify(question)).join(" | ") : "None yet."}\nSocial intelligence guidance: ${socialCueContext}`;
+  const common = "Speak like a perceptive real interviewer: brief, specific, and responsive to the candidate's latest reasoning. Reference one concrete idea they just expressed, then either deepen it or advance the active section. Never reuse the same underlying question twice, even with different wording. One question or one comment, under 30 words. Do not explain the rubric. Never reveal hidden context unprompted. Reference the board only through the structured state. Never ask what the design, screen, interface, or solution should look like. Ask about user needs, decisions, sequence, behavior, evidence, tradeoffs, or failure handling instead.";
+  if (options.progressionProbe) {
+    return `${base} The candidate has offered meaningful reasoning in the current section. Briefly reflect one concrete point they made without praising or validating it. Then ask exactly this reasoning challenge: "${options.progressionProbe}" This question should create productive tension and move the process forward without suggesting a solution. ${common}`;
+  }
   const asksOpinion = /what do you think|do you think|does that make sense|am i on the right track|any feedback|give me feedback|do you have feedback|is that reasonable|is this reasonable|how does that sound/.test(text.toLowerCase());
   const soundsStuck = /i'?m stuck|i am stuck|i feel stuck|i'?m blocked|i am blocked|i don'?t know what to do|i'?m lost|i am lost|not sure where to go|not sure what to do/.test(text.toLowerCase());
   if (options.requiredProbe) {
@@ -2011,7 +2136,7 @@ function responseInstructionFor(text, options = {}) {
     return `${base} The candidate is asking for your opinion. Stay neutral: do not approve the solution, redesign it, or tell them what to do next. Reflect one observable tradeoff, framework gap, or stakeholder risk, then ask one evaluation question that returns ownership to them. ${common}`;
   }
   if (options.directQuestion || isQuestion(text.toLowerCase())) {
-    return `${base} The candidate directly asked a clarifying question. Answer it as the scenario's stakeholder. Use hidden context when relevant; otherwise invent one plausible simulated detail and commit to it for this session. Give the answer first, then one brief reason explaining the user, business, operational, or technical logic behind it. Do not refuse merely because the detail was not predefined. Do not present simulated details as real facts about an actual company. Keep this to two concise spoken sentences, then stop. Treat every prior interviewer answer in the transcript as binding so the scenario remains internally consistent.`;
+    return `${base} The candidate directly asked a clarifying question. Answer it as the interviewer. Use hidden context when relevant; otherwise invent one plausible exercise detail and commit to it for this session. Give the answer first, then one brief reason explaining the user, business, operational, or technical logic behind it. Do not refuse merely because the detail was not predefined. Do not present exercise details as real facts about an actual company. Keep this to two concise spoken sentences, then stop. Treat every prior interviewer answer in the transcript as binding so the challenge remains internally consistent.`;
   }
   if (phase.id === "clarify") {
     return `${base} Phase rule: answer only the asked clarifying question using hidden context if directly relevant. Reveal at most one fact. Do not ask framing questions. ${common}`;
@@ -2028,10 +2153,44 @@ function responseInstructionFor(text, options = {}) {
   return `${base} Medium mode: be professional, collaborative, and sharp. Expect the candidate to drive the framework without prompting. If they ask for feedback, challenge one assumption only when it lacks data or logic. ${common}`;
 }
 
+function recentInterviewerQuestions(limit = 6) {
+  return state.transcript
+    .filter((turn) => turn.role === "interviewer")
+    .flatMap((turn) => String(turn.text || "").match(/[^?.!]*\?/g) || [])
+    .map((question) => question.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(-limit);
+}
+
+function ensureNovelInterviewerResponse(text, fallbackText = "") {
+  const response = String(text || "").trim();
+  if (!response || !containsRepeatedInterviewerQuestion(response)) return response;
+  const fallback = sanitizeInterviewerText(String(fallbackText || "").trim());
+  if (fallback && !containsRepeatedInterviewerQuestion(fallback)) return fallback;
+  const freshProbe = nextProgressionProbe("The candidate provided meaningful reasoning.", { force: true });
+  return freshProbe || `Let’s move forward with ${currentFrameworkStep().label.toLowerCase()}.`;
+}
+
+function containsRepeatedInterviewerQuestion(text) {
+  const incoming = String(text || "").match(/[^?.!]*\?/g) || [];
+  if (!incoming.length) return false;
+  const previous = recentInterviewerQuestions();
+  return incoming.some((question) => previous.some((asked) => questionSimilarity(question, asked) >= 0.68));
+}
+
+function questionSimilarity(left, right) {
+  const ignored = new Set(["a", "an", "and", "are", "does", "for", "how", "in", "is", "it", "of", "that", "the", "this", "to", "what", "when", "where", "which", "who", "why", "would", "you", "your"]);
+  const leftWords = new Set(normalizedSpeechWords(left).filter((word) => !ignored.has(word)));
+  const rightWords = new Set(normalizedSpeechWords(right).filter((word) => !ignored.has(word)));
+  if (!leftWords.size || !rightWords.size) return 0;
+  const shared = [...leftWords].filter((word) => rightWords.has(word)).length;
+  return shared / Math.min(leftWords.size, rightWords.size);
+}
+
 function clarificationResponseInstruction(question, seededAnswer, requiredProbe = "") {
   return `The candidate asked this clarifying question: "${question}".
-Answer as the scenario's stakeholder. Use this established scenario fact as the core answer: "${seededAnswer}"
-Give the answer first, then add one concise sentence explaining why it is true from a user, business, operational, or technical perspective. You may invent one plausible supporting detail when useful, but frame the entire exchange as simulated interview context—not a real claim about an actual company. Commit to the answer and keep it internally consistent in later turns.${requiredProbe ? ` Then ask this probing follow-up: "${requiredProbe}"` : " Do not ask a question back."} Stop after ${requiredProbe ? "three" : "two"} short spoken sentences.`;
+Answer as the interviewer. Use this established exercise fact as the core answer: "${seededAnswer}"
+Give the answer first, then add one concise sentence explaining why it is true from a user, business, operational, or technical perspective. If this fact defines the user, goal, platform, or core problem, do not broaden it, substitute another audience, or add a secondary persona. You may invent one plausible supporting detail when useful, but do not present it as a real claim about an actual company. Commit to the answer and keep it internally consistent in later turns.${requiredProbe ? ` Then ask this probing follow-up: "${requiredProbe}"` : " Do not ask a question back."} Stop after ${requiredProbe ? "three" : "two"} short spoken sentences.`;
 }
 
 function createRealtimeOpening() {
@@ -2042,12 +2201,16 @@ function createRealtimeOpening() {
 
 function phasePromptContext() {
   const scenario = scenarios[state.scenarioIndex];
+  const structuredStep = currentFrameworkStep();
   return `
 Session phase: ${currentPhase().label}. Difficulty: ${state.difficulty}. Time remaining: ${formatTime(Math.max(0, totalSessionMs() - state.elapsed))}.
+Current structured section: ${structuredStep.label}.
 Challenge: ${scenario.prompt}
 Hidden context, reveal only if asked: ${(scenario.hiddenContext || []).map((fact) => `${fact.key}: ${fact.text}`).join(" | ")}
 Board state: ${boardContextForPrompt()}
 Running summary: ${state.runningSummary || "No durable summary yet."}
+Durable context ledger. Treat every item as binding unless an explicit new constraint says exactly what changed:
+${establishedContextForPrompt()}
 Recent transcript window, last ~2 minutes only: ${recentTranscriptWindow() || "No recent transcript."}
 Rules for this phase: ${phaseRulesForPrompt(currentPhase().id)}
 `.trim();
@@ -2057,9 +2220,9 @@ function phaseRulesForPrompt(id) {
   const rules = {
     prompt: "Read or restate the challenge only. Volunteer nothing beyond the prompt text.",
     clarify: "Answer clarifying questions directly. Use hidden context first; when it does not contain the answer, invent one plausible simulated stakeholder detail, briefly explain why, and keep it consistent for the session. Never ask framing questions instead of answering.",
-    framing: "Stay mostly silent. If truly needed, ask at most one guiding question after a long stall.",
-    flow: "Observe the journey construction. Probe only when a second candidate turn would otherwise go unanswered.",
-    sketch: "Observe active sketching and tradeoff reasoning. Probe unaddressed resilience risks without prescribing the design.",
+    framing: "Challenge one assumption, prioritization choice, or evidence gap after meaningful reasoning. Help the candidate progress without proposing a solution.",
+    flow: "Challenge the journey logic, decision sequence, or connection to the chosen outcome. Do not ask about visual appearance.",
+    sketch: "Challenge interaction behavior, system response, tradeoffs, and recovery. Never prescribe layout or styling.",
     summary: "Become active around success metrics, summary, and what the candidate would do with more time. Never introduce new constraints."
   };
   return rules[id] || "Stay brief and candidate-led.";
@@ -2250,6 +2413,7 @@ function requestRealtimeResponse(instructions, options = {}) {
     questionText: String(options.questionText || "").trim(),
     fallbackText: String(options.fallbackText || "").trim()
   };
+  state.interviewerPlaybackGuardUntil = Math.max(state.interviewerPlaybackGuardUntil, Date.now() + 2500);
   setMicrophoneCapture(false);
   const sent = sendRealtimeEvent({
     event_id: requestId,
@@ -2355,13 +2519,50 @@ function setMicrophoneCapture(enabled) {
 
 function resumeMicrophoneAfterResponse() {
   clearTimeout(microphoneResumeTimer);
+  const remainingPlaybackGuard = Math.max(0, state.interviewerPlaybackGuardUntil - Date.now());
   microphoneResumeTimer = window.setTimeout(() => {
     microphoneResumeTimer = null;
     if (state.listening && state.started && !state.ended && !state.realtimeResponseActive && !state.realtimeResponseRequested) {
       setMicrophoneCapture(true);
       setListeningState("listening", "Interviewer listening", "Think out loud, or press Ask interviewer for a direct response.");
     }
-  }, 900);
+  }, Math.max(900, remainingPlaybackGuard));
+}
+
+function rememberInterviewerPlayback(text) {
+  const spokenText = String(text || "").trim();
+  if (!spokenText) return;
+  state.lastInterviewerSpeechText = spokenText;
+  const wordCount = getWords(spokenText).length;
+  const estimatedPlaybackMs = Math.min(12000, Math.max(2400, (wordCount / 2.6) * 1000 + 900));
+  state.interviewerPlaybackGuardUntil = Math.max(state.interviewerPlaybackGuardUntil, Date.now() + estimatedPlaybackMs);
+}
+
+function candidateAudioIsSuppressed() {
+  return state.realtimeResponseActive
+    || state.realtimeResponseRequested
+    || Date.now() < state.interviewerPlaybackGuardUntil;
+}
+
+function normalizedSpeechWords(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s']/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function isLikelyInterviewerEcho(text) {
+  const capturedWords = normalizedSpeechWords(text);
+  if (capturedWords.length < 4) return false;
+  const recentInterviewerText = state.lastInterviewerSpeechText || (state.openingResponsePending ? openingLine() : "");
+  const interviewerWords = normalizedSpeechWords(recentInterviewerText);
+  if (interviewerWords.length < 4) return false;
+  const captured = new Set(capturedWords);
+  const interviewer = new Set(interviewerWords);
+  const shared = [...captured].filter((word) => interviewer.has(word)).length;
+  const overlap = shared / Math.min(captured.size, interviewer.size);
+  return overlap >= 0.72 && Date.now() < state.interviewerPlaybackGuardUntil + 4000;
 }
 
 function attachRemoteAudio(stream) {
@@ -2428,18 +2629,41 @@ The candidate is solving: ${scenario.prompt}
 Hidden context. Reveal ONLY if asked a relevant clarifying question, one fact at a time:
 ${(scenario.hiddenContext || []).map((fact) => `- ${fact.key}: ${fact.text}`).join("\n")}
 
+Canonical identity locks. These are immutable for the session unless the candidate explicitly chooses and states a narrower subset:
+- Primary user: ${scenario.truth.who}
+- Product surface: ${scenario.truth.platform}
+- Core outcome: ${scenario.truth.goal}
+- Core problem/object: ${scenario.truth.object}
+Never replace these with a consumer, enterprise, administrator, operator, or other audience from your own imagination.
+
 Constraint deck. Use only when difficulty and phase rules allow it:
 ${(scenario.constraints || []).map((constraint) => `- ${constraint}`).join("\n")}
+
+Durable context ledger. This survives the short realtime transcript window. Treat it as binding:
+${establishedContextForPrompt()}
 
 ${boardContextForPrompt()}
 
 Rules of engagement:
+- Facilitate this exact sequence one section at a time: Clarify the problem → Define success → Identify users → Map the journey → Prioritize one problem → Ideate → Design the end-to-end flow → Discuss edge cases.
+- The active section is: ${currentFrameworkStep().label}. Stay on this section until the candidate provides concrete spoken or board evidence. Do not jump ahead merely because a later topic is mentioned.
+- At a transition, say the next section name once in natural language and ask one opening question. Do not recite the full framework and do not repeatedly call this an "interview scenario."
+- Converge instead of expanding the story. Each turn should narrow the user, outcome, priority, or solution decision for the same challenge.
+- Once the primary user, goal, platform, success definition, or core problem has been established, never replace it, rename it, or introduce a competing version later.
+- The canonical identity locks above are stronger than generic examples in these instructions. Examples must never introduce a different audience or product context.
+- When a candidate repeats a factual question, give the same established answer in shorter language. Do not generate a new stakeholder, domain, product, goal, metric, or backstory.
+- A new constraint may reduce scope, challenge an assumption, or add a failure condition. It must not change the challenge into a different story or move the candidate to a different problem.
+- If a constraint genuinely changes one established fact, explicitly say which single fact changed and why. All other established facts remain binding.
+- Use the durable context ledger above before inventing any detail. Invent only when the requested detail is absent from both hidden context and the ledger, and make the smallest detail needed to unblock the current section.
+- Never ask "What should the design look like?", "What would that screen look like?", or any equivalent appearance question. Visual styling, colors, polish, and subjective aesthetics are outside your role.
+- Before the end-to-end flow section, do not ask for screens, layout, UI, wireframes, or visual form. Keep questions on the problem, success, users, journey, prioritization, and breadth of ideas.
+- During the end-to-end flow section, ask what the user does, sees, decides, and what the system does in response. Ask about states and transitions, not appearance.
 - Do not solve the problem. Never give away the design solution. Your job is to push the candidate to discover it.
 - Enforce a framework by asking the candidate to explicitly state their process, not by choosing the answer for them.
 - The framework you are listening for: understanding the goal and constraints; defining the user persona and empathy map; outlining the core user journey or flow; ideating features and system architecture; sketching or wireframing wire-level interfaces; naming metrics, risks, and tradeoffs.
 - If the candidate skips a framework step, ask a sharp question that exposes the gap. Do not tell them what to draw.
 - Be a realistic stakeholder. Ask probing questions about entry points, AI uncertainty, user mistrust, technical feasibility, V1 scope, launch deadlines, business constraints, and evidence.
-- Once the candidate has a direction, interject with plot twists such as missing API capability, data science showing abandonment at a specific step, legal/privacy concerns, enterprise admin constraints, or a 3-week 0-to-1 launch deadline.
+- Once the candidate has a direction, interject with a constraint such as missing API capability, abandonment at a specific step, legal/privacy requirements, admin permissions, or a launch deadline. The constraint must narrow the existing direction without replacing the user, goal, or product context.
 - When introducing a new constraint or plot twist, state it in one concrete sentence so it can be pinned in the constraint ledger.
 
 Google interviewer DNA:
@@ -2454,17 +2678,24 @@ Behavior:
 - Keep replies short, spoken, and interview-like: one or two sentences.
 - Prefer a single short question. Do not exceed 35 words unless the candidate explicitly asks you to repeat or clarify something factual.
 - Speak at a measured interview pace with brief pauses between ideas so the candidate can follow.
-- The candidate leads. Your default behavior is silence.
+- Adapt to explicit conversational cues such as the candidate directly saying they are frustrated, confused, unsure, rushed, or asking for repair. Briefly acknowledge the interaction need, then preserve their ownership of the design decision.
+- Emotional intelligence means respectful pacing, repair, and calibrated challenge—not guessing feelings. Never diagnose, label, score, or state the candidate's emotion, personality, confidence, anxiety, or intent.
+- Do not infer emotion from sighs, breathing, silence, typing, vocal pitch, accent, speech differences, brevity, or background noise. These are not reliable social signals and must not affect evaluation.
+- When the candidate apologizes or sounds self-conscious in their words, normalize ambiguity without falsely reassuring them that their solution is correct.
+- Match intensity without mirroring hostility: remain calm, concise, and specific. Challenge the work product and reasoning, never the person.
+- The candidate leads, but you are an active facilitator. After a meaningful chunk of reasoning, offer one concise reflection plus one question that either deepens the current section or transitions to the next.
+- Challenge the rationale, not the artifact. Useful pressure tests assumptions, evidence, prioritization, causal logic, tradeoffs, feasibility, ethics, trust, and what the candidate intentionally excludes.
+- Guidance means maintaining momentum through the structured sections. If the candidate circles without deciding, ask for a decision criterion. If they have enough evidence, name the next section and move forward.
 - Most question-shaped sentences are self-talk in a whiteboard interview. Do not respond to rhetorical questions, partial thoughts, repetition, typing narration, or "what if" exploration unless the candidate clearly addresses you or asks for interviewer signal.
-- If the candidate asks a clarifying question, answer it directly as the scenario's stakeholder. Use hidden facts when they apply. If no hidden fact answers it, invent one plausible simulated detail, decision, number, constraint, or user behavior that gives the candidate something concrete to design against.
+- If the candidate asks a clarifying question, answer it directly as the interviewer. Use hidden facts when they apply. If no hidden fact answers it, invent one plausible exercise detail, decision, number, constraint, or user behavior that gives the candidate something concrete to design against.
 - Give the direct answer first and then one brief sentence of reasoning. The reasoning should explain the user need, business goal, operational reality, or technical tradeoff behind the answer—not reveal chain-of-thought.
-- Treat invented details as fictional interview context, never as verified facts about Google or another real company. Once stated, they are binding scenario facts: remain consistent with them in every later answer unless you explicitly introduce a realistic changed constraint.
+- Treat invented details as fictional exercise context, never as verified facts about Google or another real company. Once stated, they are binding challenge facts: remain consistent with them in every later answer unless you explicitly introduce a realistic changed constraint.
 - Never evade a reasonable clarifying question by only telling the candidate to make an assumption. You are allowed to make the stakeholder decision for the simulation while leaving the product solution to the candidate.
 - If they ask for feedback, assess whether their thinking covers user, goal, constraints, tradeoffs, flow, metrics, or edge cases. Do not tell them what to create next.
 - Do not volunteer the target user, product space, constraints, or solution direction unless the candidate asks for that specific information.
 - Treat ordinary narration as thinking out loud. Stay quiet while they repeat themselves, type what they said, sketch, pause briefly, or compare options.
 - Do not over-specify the challenge early. Ask them to state assumptions when useful.
-- Interrupt gently only after a long silence, if they directly say they are stuck, if they ask for help, if they drift far away from the goal, or when a realistic constraint is appropriate for the selected difficulty.
+- Interrupt gently after a meaningful reasoning block when a challenge will sharpen the decision, after a long silence, when they are stuck, when they drift from the goal, or when a realistic constraint is appropriate.
 - Phase rules: ${phaseRulesForPrompt(currentPhase().id)}
 - When the candidate asks for your opinion, remain neutral. Do not validate the answer as correct and do not take over the design. Reflect one observable tradeoff or risk, then ask one question that returns ownership to the candidate.
 - When the candidate is stuck, ask one neutral assessment question that makes them choose their own assumption, scope, or decision criterion.
@@ -2486,7 +2717,7 @@ Behavior:
 Difficulty:
 - Easy / Google Core Product Team: act like an Interaction Designer on an established product such as Docs or Maps. Be collaborative and structured. Give a clear problem within a known ecosystem. If the candidate forgets the framework, explicitly prompt the next step. Nudge for basic accessibility, mobile responsiveness, Material/horizontal patterns, and standard Google ecosystem fit.
 - Medium / 0-1 X Moonshot Team: act like a UX Lead launching a net-new initiative. Be professional and collaborative, but test ambiguity tolerance. Expect the candidate to drive the framework without prompting. Midway, introduce one cross-functional wrench such as 3PS/privacy constraints, no local data storage, scope cuts, or technical feasibility limits.
-- Hard / Conversational AI and Research Org: act like a Senior Staff Designer or UX Director working on non-deterministic systems and complex internal infrastructure. Be analytical, quiet, skeptical, and focused on system architecture tradeoffs. Start with a massive ambiguous prompt and zero initial constraints. Push the first three assumptions hard. Drop severe pivots around hallucination rate, inference latency, trust, privacy, reliability, or internal tooling constraints.
+- Hard / Conversational AI and Research Org: act like a Senior Staff Designer or UX Director working on non-deterministic systems and complex internal infrastructure. Be analytical, quiet, skeptical, and focused on system architecture tradeoffs. Push early assumptions with evidence and introduce severe constraints around hallucination rate, inference latency, trust, privacy, reliability, or internal tooling. Constraints must narrow the same challenge, never replace its story.
 
 Evaluate silently against the whiteboarding rubric: framing and scoping, clarifying questions, user empathy, persona and empathy mapping, structured exploration, breadth before depth, user journey and flow, system architecture, wire-level interface thinking, visual communication, tradeoffs, constraints, metrics, Google scale thinking, ecosystem integration, data validation, accessibility, collaboration with the interviewer, adaptability, and time management.
 `.trim();
@@ -2895,7 +3126,8 @@ function maybeConstraintInjection() {
   const limit = state.difficulty === "hard" ? 2 : 1;
   if (state.usedConstraintTexts.size >= limit) return;
   if (state.difficulty === "medium" && !candidateIsCruising()) return;
-  const noFraming = ["flow", "sketch"].includes(currentPhase().id) && !frameworkStepHasEvidence("frame") && !frameworkStepHasEvidence("user");
+  const noFraming = ["flow", "sketch"].includes(currentPhase().id)
+    && (!frameworkStepHasEvidence("clarify-problem") || !frameworkStepHasEvidence("identify-users"));
   if (noFraming) {
     interject("Pause there: what user and goal are you optimizing around?");
     return;
@@ -2950,7 +3182,9 @@ function maybeWrapPrompts(remaining) {
 }
 
 function candidateIsCruising() {
-  return frameworkStepHasEvidence("frame") && frameworkStepHasEvidence("user") && (frameworkStepHasEvidence("flow") || state.boardElements.length >= 3);
+  return frameworkStepHasEvidence("clarify-problem")
+    && frameworkStepHasEvidence("identify-users")
+    && (frameworkStepHasEvidence("design-flow") || state.boardElements.length >= 3);
 }
 
 function stakeholderPlotTwist() {
@@ -2984,6 +3218,7 @@ function speakInterviewerText(text) {
   if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return;
   window.speechSynthesis.cancel();
   if (state.interviewerMuted) return;
+  rememberInterviewerPlayback(text);
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = 0.92;
   utterance.pitch = 1;
@@ -2996,8 +3231,24 @@ function speakInterviewerText(text) {
 
 function sanitizeInterviewerText(text) {
   const mechanics = /\b(mode|constraint deck|rubric|token|system prompt|hidden context|phase rule)\b/i;
-  if (!mechanics.test(text)) return text;
-  return "Let’s keep this grounded in the problem. What assumption are you making right now?";
+  if (mechanics.test(text)) return "Let’s keep this grounded in the problem. What assumption are you making right now?";
+  const appearanceQuestion = /\b(?:what|how)\b[^?.!]{0,80}\b(?:design|screen|interface|solution|experience|it)\b[^?.!]{0,50}\blook(?:s|ed|ing)?(?: like)?\b|\bwhat should (?:it|the design|the screen|the interface) look like\b/i;
+  if (appearanceQuestion.test(text)) return structuredSectionQuestion(currentFrameworkStep().id);
+  return text;
+}
+
+function structuredSectionQuestion(id) {
+  const questions = {
+    "clarify-problem": "What do you need to clarify before defining the problem?",
+    "define-success": "What outcome would tell you this solved the right problem?",
+    "identify-users": "Who experiences this problem most directly, and in what context?",
+    "map-journey": "Where in the current journey does the problem become most painful?",
+    "prioritize-problem": "Which single problem will you prioritize, and why that one?",
+    ideate: "What distinct approaches could address that prioritized problem?",
+    "design-flow": "What does the user do first, and how does the system respond?",
+    "edge-cases": "What failure or exception could break this flow?"
+  };
+  return questions[id] || "What decision are you trying to make at this point in the flow?";
 }
 
 function setSilent() {
@@ -3156,8 +3407,10 @@ function renderAiDebrief(evaluation) {
   const average = scoredRows.reduce((sum, row) => sum + Number(row.score), 0) / scoredRows.length;
   els.overallScore.textContent = `${average.toFixed(1)} / 5`;
   els.overallScore.setAttribute("aria-label", `Overall score ${average.toFixed(1)} out of 5`);
-  els.evaluationSummary.textContent = evaluation.summary || "";
-  els.evaluationSummary.hidden = !evaluation.summary;
+  // The generated overview repeated the detailed rubric and practice summary.
+  // Keep it available in exports/history, but remove it from the report surface.
+  els.evaluationSummary.textContent = "";
+  els.evaluationSummary.hidden = true;
   els.scoreRows.innerHTML = "";
   const reportGroups = [
     {
@@ -3201,11 +3454,8 @@ function renderAiDebrief(evaluation) {
   els.nextNotes.innerHTML = "";
   renderReportSummary({
     strongest: evaluation.strongestMoment || "No clear strongest moment was captured in this session.",
-    priority: evaluation.priorityImprovement || "Complete a longer practice session so the report can identify a focused improvement.",
-    note: "This evaluates product reasoning and completeness—not drawing polish. Practice signal, not a prediction."
+    priority: evaluation.priorityImprovement || "Complete a longer practice session so the report can identify a focused improvement."
   });
-  renderTimelineBar();
-  renderProcessSection();
   openReport();
   saveCompletedSession({
     score: scoredRows.length ? `${average.toFixed(1)} / 5` : "Not scored",
@@ -3249,9 +3499,13 @@ function appendScoreRow(row, container = els.scoreRows) {
   title.textContent = row.label || "Rubric area";
   const note = document.createElement("span");
   note.textContent = row.rationale || row.feedback || row.note || "";
-  const evidence = document.createElement("span");
+  const evidence = document.createElement("details");
   evidence.className = "score-evidence";
-  evidence.textContent = `Evidence: ${row.evidence || "No concrete evidence captured."}`;
+  const evidenceLabel = document.createElement("summary");
+  evidenceLabel.textContent = "View supporting evidence";
+  const evidenceCopy = document.createElement("p");
+  evidenceCopy.textContent = row.evidence || "No concrete evidence captured.";
+  evidence.append(evidenceLabel, evidenceCopy);
   const meter = document.createElement("span");
   meter.className = "score-meter";
   meter.setAttribute("aria-hidden", "true");
@@ -3299,11 +3553,8 @@ function renderDebrief() {
   els.nextNotes.innerHTML = "";
   renderReportSummary({
     strongest: scoredRows.length ? strongestMoment(scoredRows) : "No clear strongest moment was captured in this session.",
-    priority: scoredRows.length ? roundRisk(scoredRows) : "Complete a longer practice session to receive focused improvement guidance.",
-    note: `Overall leaning: ${leaning.label}. ${leaning.reason} Practice signal, not a prediction.`
+    priority: scoredRows.length ? roundRisk(scoredRows) : "Complete a longer practice session to receive focused improvement guidance."
   });
-  renderTimelineBar();
-  renderProcessSection();
   openReport();
   saveCompletedSession({ score: leaning.label, summary: leaning.reason });
   els.scorecard.scrollTop = 0;
@@ -3372,22 +3623,22 @@ function appendDebriefNote(note) {
   els.nextNotes.appendChild(div);
 }
 
-function renderReportSummary({ strongest, priority, note = "" }) {
+function renderReportSummary({ strongest, priority }) {
   const section = document.createElement("section");
   section.className = "report-summary-section";
   const header = document.createElement("header");
   header.className = "rubric-group-header";
   const title = document.createElement("h3");
-  title.textContent = "Summary";
+  title.textContent = "Practice summary";
   const description = document.createElement("p");
-  description.textContent = "What worked and what to focus on in the next practice session.";
+  description.textContent = "Your strongest demonstrated skill and the most useful focus for your next session.";
   header.append(title, description);
 
   const grid = document.createElement("div");
   grid.className = "report-summary-grid";
   [
-    { kind: "positive", label: "Strongest moment", body: strongest },
-    { kind: "improvement", label: "Priority improvement", body: priority }
+    { kind: "positive", label: "What went well", body: simplifyCoachingCopy(strongest) },
+    { kind: "improvement", label: "What to practice next", body: simplifyCoachingCopy(priority) }
   ].forEach((item) => {
     const card = document.createElement("article");
     card.className = `report-summary-card ${item.kind}`;
@@ -3399,13 +3650,20 @@ function renderReportSummary({ strongest, priority, note = "" }) {
     grid.appendChild(card);
   });
   section.append(header, grid);
-  if (note) {
-    const footnote = document.createElement("p");
-    footnote.className = "report-summary-note";
-    footnote.textContent = note;
-    section.appendChild(footnote);
-  }
   els.nextNotes.appendChild(section);
+}
+
+function simplifyCoachingCopy(value) {
+  const clean = String(value || "")
+    .replace(/^(?:strongest moment|priority improvement)\s*:\s*/i, "")
+    .replace(/\bThe candidate\b/g, "You")
+    .replace(/\bthe candidate\b/g, "you")
+    .replace(/\bCandidate\b/g, "You")
+    .replace(/\bcandidate\b/g, "you")
+    .replace(/\s+/g, " ")
+    .trim();
+  const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
+  return truncateText(sentences.slice(0, 2).join(" ").trim(), 360);
 }
 
 function addConstraint(text, source = "Constraint") {
@@ -4530,17 +4788,23 @@ function currentFrameworkStepId() {
   return frameworkSteps.find((step) => !frameworkStepHasEvidence(step.id))?.id || "validate";
 }
 
+function currentFrameworkStep() {
+  return frameworkSteps.find((step) => step.id === currentFrameworkStepId()) || frameworkSteps.at(-1);
+}
+
 function frameworkStepHasEvidence(id) {
   const text = `${state.transcript.map((turn) => turn.text).join(" ")} ${state.boardText}`.toLowerCase();
   const has = (terms) => terms.some((term) => text.includes(term));
   const analysis = state.boardAnalysis || window.WhiteboardSceneAnalysis.analyzeScene(state.boardElements);
   const checks = {
-    frame: state.revealed.has("goal") || state.revealed.has("constraint") || has(["goal", "success", "constraint", "scope", "problem"]),
-    user: state.revealed.has("who") || has(["user", "persona", "customer", "traveler", "admin", "technician", "empathy", "pain"]),
-    flow: analysis.hasFlow,
-    system: has(["system", "architecture", "tradeoff", "risk", "api", "latency", "permission", "scale", "trust"]),
-    wire: analysis.hasSketchCluster,
-    validate: has(["metric", "measure", "telemetry", "a/b", "experiment", "validate", "guardrail"])
+    "clarify-problem": state.answeredQuestionKeys.size >= 2 || has(["clarify", "assumption", "constraint", "problem statement", "scope"]),
+    "define-success": state.revealed.has("success") || state.revealed.has("goal") || has(["success", "metric", "outcome", "goal", "measure", "guardrail"]),
+    "identify-users": state.revealed.has("who") || has(["user", "persona", "customer", "traveler", "admin", "technician", "empathy", "pain point"]),
+    "map-journey": has(["journey", "current flow", "today", "stage", "step", "touchpoint", "before", "during", "after"]),
+    "prioritize-problem": has(["prioritize", "priority", "focus on", "top problem", "primary pain", "v1 scope", "most important"]),
+    ideate: has(["ideate", "idea", "option", "alternative", "concept", "direction", "could build", "brainstorm"]),
+    "design-flow": analysis.hasFlow || has(["end-to-end", "end to end", "entry point", "happy path", "screen flow"]),
+    "edge-cases": has(["edge case", "failure", "error state", "empty state", "offline", "accessibility", "permission", "concurrent", "risk", "exception"])
   };
   return Boolean(checks[id]);
 }
@@ -4603,8 +4867,8 @@ function render() {
   renderCompanyPickerLabel();
   els.modeSelect.value = state.mode;
   syncShellSelect(els.modeSelect);
-  els.phaseName.textContent = state.started ? phases[state.phaseIndex].label : state.ended ? "Session complete" : "Not started";
-  els.phaseHint.textContent = state.started ? phaseHint(phases[state.phaseIndex].id) : state.ended ? `Ended at ${state.endedAtText || "session end"}. Challenge: ${scenario.prompt}` : "";
+  els.phaseName.textContent = state.started ? currentFrameworkStep().label : state.ended ? "Session complete" : "Not started";
+  els.phaseHint.textContent = state.started ? frameworkStepHint(currentFrameworkStep().id) : state.ended ? `Ended at ${state.endedAtText || "session end"}. Challenge: ${scenario.prompt}` : "";
   els.sessionClock.textContent = state.started ? formatTime(Math.max(0, totalSessionMs() - state.elapsed)) : formatTime(totalSessionMs());
   if (els.topbarClock) els.topbarClock.textContent = els.sessionClock.textContent;
   els.budgetLabel.textContent = "";
@@ -4664,6 +4928,20 @@ function phaseHint(id) {
     summary: "Summarize the decision, tradeoffs, success metrics, and what you would validate next."
   };
   return hints[id] || "Keep thinking out loud while you work.";
+}
+
+function frameworkStepHint(id) {
+  const hints = {
+    "clarify-problem": "Clarify the objective, constraints, assumptions, and boundaries before proposing solutions.",
+    "define-success": "Name the desired outcome, primary metric, and important guardrail.",
+    "identify-users": "Identify the primary user, their context, motivation, and pain points.",
+    "map-journey": "Describe the user's current journey and the moments where the problem appears.",
+    "prioritize-problem": "Choose one user problem to solve first and explain why it matters most.",
+    ideate: "Explore multiple directions before committing to one approach.",
+    "design-flow": "Design the entry point, main path, key decisions, and completion state.",
+    "edge-cases": "Discuss failures, permissions, accessibility, uncertainty, and recovery."
+  };
+  return hints[id] || phaseHint(currentPhase().id);
 }
 
 function announce(text) {
