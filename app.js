@@ -235,6 +235,24 @@ const frameworkSteps = [
   { id: "edge-cases", label: "Discuss edge cases" }
 ];
 
+const staffLevelFramework = `
+Keep the CLEAR DESIGN framework in mind as a flexible coverage map, not a script:
+- Clarify the problem: business goal, problem type, primary users, platform, geography, legal, time, and AI constraints. Do not encourage drawing yet.
+- Learn about users: consider primary, secondary, and tertiary users, then expect one explicitly prioritized primary user.
+- Establish goals and metrics: separate business goals from user goals; define measurable outcomes and guardrails.
+- Analyze the current journey: map the current sequence and identify evidence-backed pain points.
+- Rank and prioritize problems: choose one problem and explain why other problems are excluded.
+- Diverge: consider two or three meaningfully different concepts before selecting a direction.
+- Execute the end-to-end flow: entry, key decision, system response, confirmation, recovery, and follow-up. Favor flows over isolated screens.
+- Stress-test edge cases: offline, incorrect AI output, changed intent, collaboration, safety, loading, empty, error, and recovery states.
+- Involve cross-functional partners: product, engineering, research, content design, data science, and legal/policy, only where their contribution affects a decision.
+- Gauge success: revisit adoption, completion, retention, satisfaction, revenue, safety, time saved, and guardrail metrics.
+- Navigate trade-offs: name benefits, costs, risks, mitigations, rollout strategy, and what is deliberately sacrificed.
+- Future vision: explain how a successful first version could extend through personalization, accessibility, collaboration, automation, platforms, markets, or broader strategy.
+Staff-level lenses are continuous: adjacent journeys, trust, privacy, safety, system scale, new markets and segments, technical feasibility, assumptions to validate, and broader product strategy.
+Recognize strong evidence in any order. Never recite this framework to the candidate or force every item into the conversation. Use it silently to notice the highest-value missing area and ask one relevant question.
+`.trim();
+
 const challengeFamilies = {
   "google-data-center-anomaly-dashboard": "systems",
   "google-travel-flight-delay-remediation": "systems",
@@ -427,6 +445,8 @@ const state = {
   ended: false,
   transcript: [],
   runningSummary: "",
+  reasoningMemory: createEmptyReasoningMemory(),
+  questionMemory: { askedProbeIds: [], coveredTopicIds: [], incompleteTopicIds: [], askedQuestions: [], pendingProbeId: "" },
   realtimeItems: [],
   revealed: new Set(),
   constraints: [],
@@ -1030,6 +1050,8 @@ function resetSession() {
     ended: false,
     transcript: [],
     runningSummary: "",
+    reasoningMemory: createEmptyReasoningMemory(),
+    questionMemory: window.WhiteboardTurnPolicy.createQuestionMemory(),
     realtimeItems: [],
     revealed: new Set(),
     constraints: [],
@@ -1643,8 +1665,18 @@ function handleRealtimeEvent(message) {
       logMessage("system", responseFailureMessage);
       announce(responseFailureMessage);
     }
-    useFallback("Give me a moment to look at your board.");
+    restoreListeningAfterResponseFailure();
   }
+}
+
+function restoreListeningAfterResponseFailure() {
+  if (!state.listening || !state.realtimeReady) {
+    useFallback("The interviewer connection was lost. Your board is safe; retry the microphone when you are ready.");
+    return;
+  }
+  hideVoiceError();
+  setListeningState("listening", "Interviewer listening", "The last response could not be completed, but the microphone is still connected. Keep thinking out loud or ask again.");
+  announce("The interviewer could not complete the last response, but is still listening.");
 }
 
 function beginSpeechCapture() {
@@ -1719,12 +1751,116 @@ function responseOutputItemIds(event) {
 function recordTranscriptTurn(role, text, extra = {}) {
   const turn = { role, text, at: state.elapsed, ...extra };
   state.transcript.push(turn);
-  if (role === "candidate") trackCandidateAssumptions(text);
+  if (role === "candidate") {
+    trackCandidateAssumptions(text);
+    updateReasoningMemoryFromCandidate(text);
+    state.questionMemory = window.WhiteboardTurnPolicy.rememberCandidateAnswer(state.questionMemory, text, scenarios[state.scenarioIndex].id);
+  }
+  if (role === "interviewer") {
+    updateReasoningMemoryFromInterviewer(text);
+    state.questionMemory = window.WhiteboardTurnPolicy.rememberInterviewerQuestion(state.questionMemory, text, scenarios[state.scenarioIndex].id);
+  }
   updateRunningSummary();
   if (extra.realtimeItemId) rememberRealtimeItem(extra.realtimeItemId, role);
   if (extra.realtimeItemIds) extra.realtimeItemIds.forEach((id) => rememberRealtimeItem(id, role));
   pruneRealtimeConversationWindow();
   return turn;
+}
+
+function createEmptyReasoningMemory() {
+  return {
+    problem: [],
+    success: [],
+    users: [],
+    journey: [],
+    priorities: [],
+    ideas: [],
+    flow: [],
+    edgeCases: [],
+    crossFunctional: [],
+    validation: [],
+    tradeoffs: [],
+    futureVision: [],
+    systemsThinking: [],
+    candidateQuestions: [],
+    establishedAnswers: []
+  };
+}
+
+function rememberReasoning(category, value, limit = 5) {
+  const clean = truncateText(String(value || "").replace(/\s+/g, " ").trim(), 190);
+  if (!clean) return;
+  const memory = state.reasoningMemory || (state.reasoningMemory = createEmptyReasoningMemory());
+  const entries = memory[category] || (memory[category] = []);
+  const key = normalizeBoardText(clean).toLowerCase();
+  if (entries.some((entry) => normalizeBoardText(entry).toLowerCase() === key)) return;
+  entries.push(clean);
+  if (entries.length > limit) entries.splice(0, entries.length - limit);
+}
+
+function updateReasoningMemoryFromCandidate(text) {
+  const sentences = String(text || "").split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
+  const stepCategory = {
+    "clarify-problem": "problem",
+    "define-success": "success",
+    "identify-users": "users",
+    "map-journey": "journey",
+    "prioritize-problem": "priorities",
+    ideate: "ideas",
+    "design-flow": "flow",
+    "edge-cases": "edgeCases",
+    "cross-functional": "crossFunctional",
+    "validate-success": "validation",
+    "trade-offs": "tradeoffs",
+    "future-vision": "futureVision"
+  }[currentFrameworkStep().id];
+  sentences.forEach((sentence) => {
+    if (stepCategory) rememberReasoning(stepCategory, sentence);
+    if (/\b(success|metric|measure|outcome|kpi|guardrail)\b/i.test(sentence)) rememberReasoning("success", sentence);
+    if (/\b(user|customer|client|persona|audience|sales rep|admin|operator)\b/i.test(sentence)) rememberReasoning("users", sentence);
+    if (/\b(journey|before|after|currently|today|step|stage|moment)\b/i.test(sentence)) rememberReasoning("journey", sentence);
+    if (/\b(prioriti[sz]e|primary|focus on|choose|chose|leav(?:e|ing) out|v1)\b/i.test(sentence)) rememberReasoning("priorities", sentence);
+    if (/\b(option|alternative|concept|idea|approach|could)\b/i.test(sentence)) rememberReasoning("ideas", sentence);
+    if (/\b(flow|first|then|next|screen|state|entry point|handoff)\b/i.test(sentence)) rememberReasoning("flow", sentence);
+    if (/\b(edge case|failure|error|recover|risk|permission|privacy|offline|conflict)\b/i.test(sentence)) rememberReasoning("edgeCases", sentence);
+    if (/\b(pm|product manager|engineering|engineer|research|researcher|content design|data science|legal|policy|compliance|cross-functional|partner)\b/i.test(sentence)) rememberReasoning("crossFunctional", sentence);
+    if (/\b(validate|experiment|a\/b|rollout|adoption|retention|satisfaction|revenue|time saved|click-through|completion rate)\b/i.test(sentence)) rememberReasoning("validation", sentence);
+    if (/\b(trade[ -]?off|pros?|cons?|sacrifice|cost|benefit|mitigation|progressive disclosure)\b/i.test(sentence)) rememberReasoning("tradeoffs", sentence);
+    if (/\b(future|later|expand|vision|personalization|automation|new market|broader strategy)\b/i.test(sentence)) rememberReasoning("futureVision", sentence);
+    if (/\b(adjacent|scale|system|ecosystem|market|platform|trust|safety|technical feasibility|assumption)\b/i.test(sentence)) rememberReasoning("systemsThinking", sentence);
+    if (sentence.includes("?")) rememberReasoning("candidateQuestions", sentence, 8);
+  });
+}
+
+function updateReasoningMemoryFromInterviewer(text) {
+  const statement = String(text || "").trim();
+  if (!statement || statement.endsWith("?") || /^(?:let'?s|what|how|why|which|who|where|when)\b/i.test(statement)) return;
+  rememberReasoning("establishedAnswers", statement, 10);
+}
+
+function activeReasoningMemoryForPrompt() {
+  const memory = state.reasoningMemory || createEmptyReasoningMemory();
+  const labels = {
+    problem: "Problem framing",
+    success: "Success measures",
+    users: "Users and context",
+    journey: "Journey evidence",
+    priorities: "Priorities and exclusions",
+    ideas: "Ideas considered",
+    flow: "Flow decisions",
+    edgeCases: "Risks and edge cases",
+    crossFunctional: "Cross-functional considerations",
+    validation: "Validation and measurement",
+    tradeoffs: "Trade-offs and mitigations",
+    futureVision: "Future vision",
+    systemsThinking: "Systems-level reasoning",
+    candidateQuestions: "Candidate questions",
+    establishedAnswers: "Established interviewer answers"
+  };
+  const lines = Object.entries(labels)
+    .filter(([key]) => memory[key]?.length)
+    .map(([key, label]) => `${label}: ${memory[key].join(" | ")}`);
+  return lines.length ? lines.join("\n") : "No durable reasoning captured yet.";
 }
 
 function updateRunningSummary() {
@@ -1744,6 +1880,10 @@ function updateRunningSummary() {
   if (frameworkStepHasEvidence("ideate")) facts.push("candidate explored multiple directions");
   if (frameworkStepHasEvidence("design-flow")) facts.push("candidate designed an end-to-end flow");
   if (frameworkStepHasEvidence("edge-cases")) facts.push("candidate discussed edge cases");
+  if (frameworkStepHasEvidence("cross-functional")) facts.push("candidate identified cross-functional partners");
+  if (frameworkStepHasEvidence("validate-success")) facts.push("candidate defined validation and measurement");
+  if (frameworkStepHasEvidence("trade-offs")) facts.push("candidate discussed trade-offs and mitigations");
+  if (frameworkStepHasEvidence("future-vision")) facts.push("candidate connected the solution to a future vision");
   const assumptionPhrases = extractSummaryPhrases(candidateText, ["assume", "assuming", "scope", "goal", "user", "because"]).slice(-3);
   const constraints = state.constraints.slice(0, 3).map((item) => item.text);
   const assumptions = state.assumptions.slice(0, 3).map((item) => item.invalidated ? `${item.text} (invalidated)` : item.text);
@@ -2008,16 +2148,33 @@ function consecutiveCandidateTurns() {
 
 function requiredFollowUpProbe(text) {
   if (!window.WhiteboardTurnPolicy.shouldForceFollowUp({ text, phaseId: currentPhase().id, transcript: state.transcript })) return "";
+  const constraintProbe = decisionConstraintProbe(text);
+  if (constraintProbe) return constraintProbe;
   const stepId = currentFrameworkStep().id;
   if (["design-flow", "edge-cases"].includes(stepId)) return nextUnaddressedEdgeCase()?.probe || nextProgressionProbe(text, { force: true });
   return nextProgressionProbe(text, { force: true });
+}
+
+function decisionConstraintProbe(text) {
+  if (state.difficulty === "easy" || !["flow", "sketch"].includes(currentPhase().id)) return "";
+  if (!/\b(i(?:'m| am| will| would)? (?:choos(?:e|ing)|prioritiz(?:e|ing)|going with|propos(?:e|ing)|decid(?:e|ed|ing)|focus(?:ing)? on)|my (?:decision|direction|approach))\b/i.test(text)) return "";
+  const limit = state.difficulty === "hard" ? 2 : 1;
+  if (state.usedConstraintTexts.size >= limit || !candidateIsCruising()) return "";
+  const constraint = stakeholderPlotTwist();
+  if (!constraint || state.usedConstraintTexts.has(constraint)) return "";
+  state.curveballUsed = true;
+  state.usedConstraintTexts.add(constraint);
+  addConstraint(constraint, "Interviewer");
+  return `${constraint} What changes in the direction you just chose?`;
 }
 
 function nextUnaddressedEdgeCase() {
   return window.WhiteboardTurnPolicy.nextUnaddressedEdgeCase({
     boardSummary: state.boardSummary,
     transcript: state.transcript,
-    scenarioId: scenarios[state.scenarioIndex].id
+    scenarioId: scenarios[state.scenarioIndex].id,
+    memory: state.questionMemory,
+    activeStepId: currentFrameworkStep().id
   });
 }
 
@@ -2075,6 +2232,30 @@ function nextProgressionProbe(text, options = {}) {
       "How would the user recover while preserving trust and control?",
       "What happens when the system has incomplete or conflicting information?",
       "Which edge case would you test before launch, and why?"
+    ],
+    "cross-functional": [
+      "Which partner would most affect this direction, and what decision do you need from them?",
+      "What technical feasibility question could change your proposed flow?",
+      "Where would research or content design reduce the greatest uncertainty?",
+      "What legal, policy, or data-science input is essential before launch?"
+    ],
+    "validate-success": [
+      "Which input metric and outcome metric would you monitor together?",
+      "What guardrail would tell you the experience is succeeding at the user's expense?",
+      "What experiment would validate your riskiest assumption first?",
+      "How would you separate novelty effects from durable user value?"
+    ],
+    "trade-offs": [
+      "What are you deliberately sacrificing with this direction?",
+      "Which risk remains after your mitigation, and why is it acceptable?",
+      "What would you test before committing to the more complex version?",
+      "How would a staged rollout change this trade-off?"
+    ],
+    "future-vision": [
+      "If this succeeds, what is the most credible next expansion?",
+      "How does this direction connect to the broader product strategy?",
+      "What would need to change for another market, platform, or user segment?",
+      "Which part should remain intentionally narrow even in the future?"
     ]
   };
   const probe = probes[step.id]?.[currentCount] || "";
@@ -2120,7 +2301,7 @@ function responseInstructionFor(text, options = {}) {
     || "Do not infer emotion or personality from the candidate's voice, silence, or wording.";
   const recentQuestions = recentInterviewerQuestions();
   const base = `Respond to the candidate's latest turn only: "${text}".\n${phasePromptContext()}\nCurrent structured section: ${structuredStep.label}. Next section: ${nextStructuredStep.label}. Keep the conversation on the current section until there is concrete evidence for it. When the candidate has covered it, explicitly name the next section once and ask one opening question for that section.\nRecent interviewer questions—do not repeat or lightly paraphrase any of these: ${recentQuestions.length ? recentQuestions.map((question) => JSON.stringify(question)).join(" | ") : "None yet."}\nSocial intelligence guidance: ${socialCueContext}`;
-  const common = "Speak like a perceptive real interviewer: brief, specific, and responsive to the candidate's latest reasoning. Reference one concrete idea they just expressed, then either deepen it or advance the active section. Never reuse the same underlying question twice, even with different wording. One question or one comment, under 30 words. Do not explain the rubric. Never reveal hidden context unprompted. Reference the board only through the structured state. Never ask what the design, screen, interface, or solution should look like. Ask about user needs, decisions, sequence, behavior, evidence, tradeoffs, or failure handling instead.";
+  const common = "Speak like a perceptive design partner, not a passive evaluator: brief, specific, and responsive to the candidate's latest reasoning. At a meaningful decision point, interrupt between turns and name the tension, unsupported assumption, or consequence you see; then push for rationale or adaptation. Reference one concrete idea they just expressed. Do not merely say 'tell me more,' agree, praise, or wait for the candidate to request feedback. Never reuse the same underlying question twice, even with different wording. One question or one comment, under 30 words. Do not explain the rubric. Never reveal hidden context unprompted. Reference the board only through the structured state. Never ask what the design, screen, interface, or solution should look like. Ask about user needs, decisions, sequence, behavior, evidence, tradeoffs, or failure handling instead.";
   if (options.progressionProbe) {
     return `${base} The candidate has offered meaningful reasoning in the current section. Briefly reflect one concrete point they made without praising or validating it. Then ask exactly this reasoning challenge: "${options.progressionProbe}" This question should create productive tension and move the process forward without suggesting a solution. ${common}`;
   }
@@ -2211,6 +2392,11 @@ Board state: ${boardContextForPrompt()}
 Running summary: ${state.runningSummary || "No durable summary yet."}
 Durable context ledger. Treat every item as binding unless an explicit new constraint says exactly what changed:
 ${establishedContextForPrompt()}
+Active session reasoning memory. Use this across the entire session, even when an item is absent from the recent transcript. Do not contradict, re-ask, or silently replace it:
+${activeReasoningMemoryForPrompt()}
+Question coverage memory. Asked probe IDs: ${state.questionMemory.askedProbeIds.join(", ") || "none"}. Covered probe IDs: ${state.questionMemory.coveredTopicIds.join(", ") || "none"}. Incomplete probe IDs (the only probes that may be revisited): ${state.questionMemory.incompleteTopicIds.join(", ") || "none"}.
+Internal staff-level coverage guidance:
+${staffLevelFramework}
 Recent transcript window, last ~2 minutes only: ${recentTranscriptWindow() || "No recent transcript."}
 Rules for this phase: ${phaseRulesForPrompt(currentPhase().id)}
 `.trim();
@@ -2642,11 +2828,17 @@ ${(scenario.constraints || []).map((constraint) => `- ${constraint}`).join("\n")
 Durable context ledger. This survives the short realtime transcript window. Treat it as binding:
 ${establishedContextForPrompt()}
 
+Active session reasoning memory:
+${activeReasoningMemoryForPrompt()}
+
+Internal staff-level framework:
+${staffLevelFramework}
+
 ${boardContextForPrompt()}
 
 Rules of engagement:
-- Facilitate this exact sequence one section at a time: Clarify the problem → Define success → Identify users → Map the journey → Prioritize one problem → Ideate → Design the end-to-end flow → Discuss edge cases.
-- The active section is: ${currentFrameworkStep().label}. Stay on this section until the candidate provides concrete spoken or board evidence. Do not jump ahead merely because a later topic is mentioned.
+- Treat the framework as a flexible coverage map. The candidate may combine sections or address a later concern early; credit concrete evidence wherever it appears and never make them repeat it.
+- The highest-value uncovered section is currently: ${currentFrameworkStep().label}. Stay with the candidate's reasoning, then use this as the next nudge only when it is genuinely missing.
 - At a transition, say the next section name once in natural language and ask one opening question. Do not recite the full framework and do not repeatedly call this an "interview scenario."
 - Converge instead of expanding the story. Each turn should narrow the user, outcome, priority, or solution decision for the same challenge.
 - Once the primary user, goal, platform, success definition, or core problem has been established, never replace it, rename it, or introduce a competing version later.
@@ -2684,6 +2876,10 @@ Behavior:
 - When the candidate apologizes or sounds self-conscious in their words, normalize ambiguity without falsely reassuring them that their solution is correct.
 - Match intensity without mirroring hostility: remain calm, concise, and specific. Challenge the work product and reasoning, never the person.
 - The candidate leads, but you are an active facilitator. After a meaningful chunk of reasoning, offer one concise reflection plus one question that either deepens the current section or transitions to the next.
+- Think alongside the candidate: maintain a current hypothesis about their direction, compare it with the established user and outcome, and surface the most consequential tension. Do not summarize mechanically.
+- Interrupt between candidate turns when they commit to a user, priority, concept, flow, metric, or tradeoff. State the specific decision you are challenging, then ask for evidence, an alternative, or the consequence they accept.
+- Push back when rationale is missing, circular, contradicted by established context, or dependent on words such as "obviously," "everyone," "always," or "best." Do not manufacture disagreement when the reasoning is already supported; move to the next uncovered risk instead.
+- Introduce a concrete constraint after the candidate has committed to a direction in the flow or sketch phase. Ask them to adapt the same direction; do not switch the challenge or prescribe the answer.
 - Challenge the rationale, not the artifact. Useful pressure tests assumptions, evidence, prioritization, causal logic, tradeoffs, feasibility, ethics, trust, and what the candidate intentionally excludes.
 - Guidance means maintaining momentum through the structured sections. If the candidate circles without deciding, ask for a decision criterion. If they have enough evidence, name the next section and move forward.
 - Most question-shaped sentences are self-talk in a whiteboard interview. Do not respond to rhetorical questions, partial thoughts, repetition, typing narration, or "what if" exploration unless the candidate clearly addresses you or asks for interviewer signal.
@@ -2752,7 +2948,7 @@ function useFallback(message) {
     state.openingComplete = true;
     maybeAdvancePhase();
   }
-  setListeningState("fallback", "Voice setup needed", message);
+  setListeningState("fallback", "Microphone disconnected", message);
   showVoiceError(message);
   announce(message);
 }
@@ -2881,6 +3077,12 @@ function answerQuestion(text) {
   const collaborationAnswer = answerCollaborationCheckIn(normalized);
   if (collaborationAnswer) return tone(collaborationAnswer);
   const hidden = Object.fromEntries((scenario.hiddenContext || []).map((fact) => [fact.key, fact.text]));
+  const quantitativeAnswer = answerQuantitativeClarification(normalized, scenario);
+  if (quantitativeAnswer) {
+    state.lastClarificationKey = "quantity";
+    state.lastClarificationAnswer = quantitativeAnswer;
+    return quantitativeAnswer;
+  }
   if (isWhyFollowUp(normalized)) {
     const followUp = answerWhyFollowUp(hidden, scenario);
     if (followUp) return tone(followUp);
@@ -2935,6 +3137,17 @@ function answerQuestion(text) {
     return tone(answerWhyFollowUp(hidden, scenario) || `Said differently: ${selectedAnswer}`);
   }
   return tone(selectedAnswer);
+}
+
+function answerQuantitativeClarification(text, scenario) {
+  const asksForQuantity = /\b(how many|how much|average|on average|per day|per week|daily|weekly|volume|frequency)\b/.test(text);
+  if (!asksForQuantity) return "";
+  const asksAboutCustomerConversations = /\b(customer|client|account|sales)\b/.test(text)
+    && /\b(calls?|conversations?|meetings?)\b/.test(text);
+  if (asksAboutCustomerConversations && ["crm-meeting-prep", "crm-follow-up"].includes(scenario.id)) {
+    return "For this exercise, assume a typical rep handles about 5 customer calls per day, with busier days reaching 8.";
+  }
+  return "";
 }
 
 function isWhyFollowUp(text) {
@@ -3246,7 +3459,11 @@ function structuredSectionQuestion(id) {
     "prioritize-problem": "Which single problem will you prioritize, and why that one?",
     ideate: "What distinct approaches could address that prioritized problem?",
     "design-flow": "What does the user do first, and how does the system respond?",
-    "edge-cases": "What failure or exception could break this flow?"
+    "edge-cases": "What failure or exception could break this flow?",
+    "cross-functional": "Which partner could most change this direction, and what input do you need?",
+    "validate-success": "How would you validate both user value and business impact?",
+    "trade-offs": "What are you deliberately sacrificing, and how would you mitigate the risk?",
+    "future-vision": "If this succeeds, how should it expand without losing focus?"
   };
   return questions[id] || "What decision are you trying to make at this point in the flow?";
 }
@@ -3678,7 +3895,7 @@ function addConstraint(text, source = "Constraint") {
 function saveSessionSnapshot() {
   if (!state.started || state.ended) return;
   const snapshot = {
-    version: 2,
+    version: 3,
     savedAt: Date.now(),
     scenarioIndex: state.scenarioIndex,
     difficulty: state.difficulty,
@@ -3693,6 +3910,8 @@ function saveSessionSnapshot() {
     answeredQuestionKeys: [...state.answeredQuestionKeys],
     transcript: state.transcript,
     runningSummary: state.runningSummary,
+    reasoningMemory: state.reasoningMemory,
+    questionMemory: state.questionMemory,
     realtimeItems: state.realtimeItems,
     revealed: [...state.revealed],
     constraints: state.constraints,
@@ -3743,6 +3962,8 @@ function offerResumeIfAvailable() {
     answeredQuestionKeys: new Set(snapshot.answeredQuestionKeys || []),
     transcript: snapshot.transcript || [],
     runningSummary: snapshot.runningSummary || "",
+    reasoningMemory: snapshot.reasoningMemory || createEmptyReasoningMemory(),
+    questionMemory: window.WhiteboardTurnPolicy.createQuestionMemory(snapshot.questionMemory),
     realtimeItems: snapshot.realtimeItems || [],
     revealed: new Set(snapshot.revealed || []),
     constraints: snapshot.constraints || [],
@@ -4804,7 +5025,11 @@ function frameworkStepHasEvidence(id) {
     "prioritize-problem": has(["prioritize", "priority", "focus on", "top problem", "primary pain", "v1 scope", "most important"]),
     ideate: has(["ideate", "idea", "option", "alternative", "concept", "direction", "could build", "brainstorm"]),
     "design-flow": analysis.hasFlow || has(["end-to-end", "end to end", "entry point", "happy path", "screen flow"]),
-    "edge-cases": has(["edge case", "failure", "error state", "empty state", "offline", "accessibility", "permission", "concurrent", "risk", "exception"])
+    "edge-cases": has(["edge case", "failure", "error state", "empty state", "offline", "accessibility", "permission", "concurrent", "risk", "exception"]),
+    "cross-functional": has(["product manager", "engineering", "engineer", "research", "content design", "data science", "legal", "policy", "compliance", "cross-functional", "partner"]),
+    "validate-success": has(["a/b", "experiment", "rollout", "adoption", "completion rate", "retention", "satisfaction", "revenue", "time saved", "click-through"]),
+    "trade-offs": has(["trade-off", "tradeoff", "pros and cons", "sacrifice", "mitigation", "progressive disclosure"]),
+    "future-vision": has(["future vision", "if this succeeds", "expand into", "personalization", "automation", "new market", "broader product strategy"])
   };
   return Boolean(checks[id]);
 }
@@ -4899,6 +5124,10 @@ function render() {
 function updateInterviewerState() {
   if (!state.started || state.ended) return;
   updateCanvasIdleState();
+  if (!state.listening && !state.realtimeConnecting) {
+    setInterviewerState("Microphone disconnected");
+    return;
+  }
   if (Date.now() < state.quietUntil) {
     setInterviewerState("Quiet time — interviewer waiting");
     return;

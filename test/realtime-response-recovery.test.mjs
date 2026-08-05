@@ -35,3 +35,12 @@ test("the interviewer cannot transcribe or interrupt its own spoken prompt", () 
   assert.match(source, /const overlap = shared \/ Math\.min\(captured\.size, interviewer\.size\)/);
   assert.match(source, /rememberInterviewerPlayback\(text\);[\s\S]*?new SpeechSynthesisUtterance/);
 });
+
+test("a recoverable response error does not masquerade as a microphone or board-observation failure", () => {
+  assert.match(source, /function restoreListeningAfterResponseFailure\(\)/);
+  assert.match(source, /The last response could not be completed, but the microphone is still connected/);
+  assert.doesNotMatch(source, /useFallback\("Give me a moment to look at your board\."\)/);
+  const disconnectedCheck = source.indexOf('if (!state.listening && !state.realtimeConnecting)');
+  const observingCheck = source.indexOf('setInterviewerState("Observing your board")', disconnectedCheck);
+  assert.ok(disconnectedCheck >= 0 && observingCheck > disconnectedCheck);
+});

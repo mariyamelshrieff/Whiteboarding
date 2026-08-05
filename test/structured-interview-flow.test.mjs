@@ -64,6 +64,10 @@ test("actively challenges reasoning and guides progress without prescribing a so
   assert.match(source, /What tradeoff separates your strongest direction from the alternatives\?/);
   assert.match(source, /The candidate leads, but you are an active facilitator/);
   assert.match(source, /Challenge the rationale, not the artifact/);
+  assert.match(source, /Think alongside the candidate/);
+  assert.match(source, /Interrupt between candidate turns when they commit/);
+  assert.match(source, /function decisionConstraintProbe\(text\)/);
+  assert.match(source, /What changes in the direction you just chose\?/);
 });
 
 test("keeps follow-ups relevant and blocks broken-record questions", () => {
@@ -71,6 +75,33 @@ test("keeps follow-ups relevant and blocks broken-record questions", () => {
   assert.match(source, /Recent interviewer questions—do not repeat or lightly paraphrase any of these/);
   assert.match(source, /ensureNovelInterviewerResponse\(sanitizeInterviewerText/);
   assert.match(source, /questionSimilarity\(question, asked\) >= 0\.68/);
+});
+
+test("answers quantitative customer-call questions before broad audience matching", () => {
+  const quantityCheck = source.indexOf("const quantitativeAnswer = answerQuantitativeClarification");
+  const broadRules = source.indexOf("const rules = [", quantityCheck);
+  assert.ok(quantityCheck >= 0 && broadRules > quantityCheck);
+  assert.match(source, /assume a typical rep handles about 5 customer calls per day/);
+  assert.match(source, /\["crm-meeting-prep", "crm-follow-up"\]\.includes\(scenario\.id\)/);
+});
+
+test("preserves active reasoning memory for the full session", () => {
+  assert.match(source, /reasoningMemory: createEmptyReasoningMemory\(\)/);
+  assert.match(source, /function updateReasoningMemoryFromCandidate\(text\)/);
+  assert.match(source, /Active session reasoning memory\. Use this across the entire session/);
+  assert.match(source, /reasoningMemory: state\.reasoningMemory/);
+  assert.match(source, /reasoningMemory: snapshot\.reasoningMemory \|\| createEmptyReasoningMemory\(\)/);
+});
+
+test("keeps the full staff-level framework in mind without turning it into a script", () => {
+  assert.match(source, /Keep the CLEAR DESIGN framework in mind as a flexible coverage map, not a script/);
+  assert.match(source, /Recognize strong evidence in any order/);
+  assert.match(source, /never make them repeat it/);
+  assert.match(source, /adjacent journeys, trust, privacy, safety, system scale/);
+  assert.match(source, /"cross-functional": has/);
+  assert.match(source, /"validate-success": has/);
+  assert.match(source, /"trade-offs": has/);
+  assert.match(source, /"future-vision": has/);
 });
 
 test("uses a concise report disclaimer and a focused practice summary", () => {
