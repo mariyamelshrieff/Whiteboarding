@@ -10,6 +10,7 @@ const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "0.0.0.0";
 const model = process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2";
 const voice = process.env.OPENAI_REALTIME_VOICE || "marin";
+const feedbackRateLimits = new Map();
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -35,6 +36,10 @@ createServer(async (request, response) => {
     }
     if (url.pathname === "/evaluate") {
       await createEvaluation(request, response);
+      return;
+    }
+    if (url.pathname === "/feedback") {
+      await createFeedback(request, response);
       return;
     }
     serveStatic(url.pathname, response);
@@ -108,6 +113,56 @@ async function createEvaluation(request, response) {
     console.error("Evaluation failed:", error);
     sendJson(response, error.status || 500, { error: error.message || "The session could not be evaluated." });
   }
+}
+
+async function createFeedback(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { error: "Use POST for /feedback." });
+    return;
+  }
+  const clientId = String(request.headers["x-forwarded-for"] || request.socket.remoteAddress || "unknown").split(",")[0].trim();
+  const now = Date.now();
+  const recent = (feedbackRateLimits.get(clientId) || []).filter((at) => now - at < 60 * 60 * 1000);
+  if (recent.length >= 5) {
+    sendJson(response, 429, { error: "Feedback limit reached. Please try again later." });
+    return;
+  }
+  const body = await readJson(request, 12 * 1024);
+  const allowed = new Set(["yes", "somewhat", "no"]);
+  if (!allowed.has(body.realistic) || !allowed.has(body.helpful)) {
+    sendJson(response, 400, { error: "Both feedback questions are required." });
+    return;
+  }
+  const feedback = {
+    submittedAt: new Date().toISOString(),
+    realistic: body.realistic,
+    helpful: body.helpful,
+    comment: String(body.comment || "").trim().slice(0, 1000),
+    challengeId: String(body.challengeId || "").slice(0, 100),
+    company: String(body.company || "").slice(0, 40),
+    difficulty: String(body.difficulty || "").slice(0, 20),
+    mode: String(body.mode || "").slice(0, 20),
+    elapsedMs: Math.max(0, Math.min(Number(body.elapsedMs) || 0, 2 * 60 * 60 * 1000))
+  };
+  if (process.env.FEEDBACK_WEBHOOK_URL) {
+    const webhookResponse = await fetch(process.env.FEEDBACK_WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.FEEDBACK_WEBHOOK_TOKEN ? { Authorization: `Bearer ${process.env.FEEDBACK_WEBHOOK_TOKEN}` } : {})
+      },
+      body: JSON.stringify(feedback)
+    });
+    if (!webhookResponse.ok) {
+      sendJson(response, 502, { error: "Feedback storage is temporarily unavailable." });
+      return;
+    }
+  } else {
+    console.log("USER_FEEDBACK", JSON.stringify(feedback));
+  }
+  feedbackRateLimits.set(clientId, [...recent, now]);
+  response.setHeader("Cache-Control", "no-store");
+  sendJson(response, 201, { accepted: true });
 }
 
 function serveStatic(pathname, response) {

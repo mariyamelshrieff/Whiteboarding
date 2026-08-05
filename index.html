@@ -160,6 +160,38 @@
         <p id="evaluationSummary" class="evaluation-summary" hidden></p>
         <div id="scoreRows"></div>
         <div id="nextNotes"></div>
+        <section id="sessionFeedback" class="session-feedback" aria-labelledby="feedbackTitle">
+          <div class="session-feedback-heading">
+            <p class="eyebrow">Help improve the simulator</p>
+            <h3 id="feedbackTitle">How was this practice session?</h3>
+            <p>Anonymous feedback. No name or email required.</p>
+          </div>
+          <form id="feedbackForm">
+            <fieldset>
+              <legend>Did the interviewer feel realistic?</legend>
+              <div class="feedback-options">
+                <label><input type="radio" name="realistic" value="yes" required> Yes</label>
+                <label><input type="radio" name="realistic" value="somewhat"> Somewhat</label>
+                <label><input type="radio" name="realistic" value="no"> No</label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Did the session help improve your approach?</legend>
+              <div class="feedback-options">
+                <label><input type="radio" name="helpful" value="yes" required> Yes</label>
+                <label><input type="radio" name="helpful" value="somewhat"> Somewhat</label>
+                <label><input type="radio" name="helpful" value="no"> No</label>
+              </div>
+            </fieldset>
+            <label class="feedback-comment" for="feedbackComment">What should we improve? <span>Optional</span></label>
+            <textarea id="feedbackComment" name="comment" maxlength="1000" rows="4" placeholder="Tell us what felt helpful, repetitive, confusing, or unrealistic."></textarea>
+            <input class="feedback-honeypot" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <div class="feedback-submit-row">
+              <button id="submitFeedback" class="secondary-button" type="submit">Send feedback</button>
+              <p id="feedbackStatus" role="status" aria-live="polite"></p>
+            </div>
+          </form>
+        </section>
       </section>
 
       <details id="sessionHistory" class="session-history">
@@ -259,7 +291,7 @@
   <script src="./scene-analysis.js?v=2"></script>
     <script src="./turn-policy.js?v=3"></script>
     <script src="./social-cue-policy.js?v=1"></script>
-  <script src="./app.js?v=38"></script>
+  <script src="./app.js?v=39"></script>
   <script type="module" src="./excalidraw-board.js?v=5"></script>
   </body>
 </html>

@@ -602,6 +602,10 @@ const els = {
   rubricDisclaimer: document.querySelector("#rubricDisclaimer"),
   scoreRows: document.querySelector("#scoreRows"),
   nextNotes: document.querySelector("#nextNotes"),
+  feedbackForm: document.querySelector("#feedbackForm"),
+  feedbackComment: document.querySelector("#feedbackComment"),
+  feedbackStatus: document.querySelector("#feedbackStatus"),
+  submitFeedback: document.querySelector("#submitFeedback"),
   askExplainer: document.querySelector("#askExplainer"),
   dismissAskExplainer: document.querySelector("#dismissAskExplainer"),
   voiceError: document.querySelector("#voiceError"),
@@ -828,6 +832,7 @@ function bindEvents() {
   els.dismissProcessNudge?.addEventListener("click", dismissProcessNudge);
   els.retryBoard?.addEventListener("click", () => window.location.reload());
   els.exportReport?.addEventListener("click", exportReport);
+  els.feedbackForm?.addEventListener("submit", submitSessionFeedback);
   els.typedReasoning?.addEventListener("submit", submitCandidateTurn);
   els.candidateInput?.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitCandidateTurn(event);
@@ -1134,6 +1139,11 @@ function resetSession() {
     loggedCandidateItems: new Set(),
     guidanceCount: 0
   });
+  if (els.feedbackForm) {
+    els.feedbackForm.reset();
+    els.feedbackForm.querySelectorAll("input, textarea, button").forEach((control) => { control.disabled = false; });
+  }
+  if (els.feedbackStatus) els.feedbackStatus.textContent = "";
   els.interviewerLog.innerHTML = "";
   if (els.transcriptEmpty) els.transcriptEmpty.hidden = false;
   els.liveTranscript.textContent = "";
@@ -3698,6 +3708,44 @@ function exportReport() {
   link.download = `whiteboarding-report-${selectedCompany().toLowerCase()}-${new Date().toISOString().slice(0, 10)}.txt`;
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function submitSessionFeedback(event) {
+  event.preventDefault();
+  if (!els.feedbackForm || !state.ended) return;
+  const form = new FormData(els.feedbackForm);
+  if (form.get("website")) return;
+  const realistic = String(form.get("realistic") || "");
+  const helpful = String(form.get("helpful") || "");
+  if (!realistic || !helpful) {
+    els.feedbackStatus.textContent = "Please answer both questions.";
+    return;
+  }
+  els.submitFeedback.disabled = true;
+  els.feedbackStatus.textContent = "Sending…";
+  try {
+    const response = await fetch("/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        realistic,
+        helpful,
+        comment: String(form.get("comment") || "").trim(),
+        challengeId: scenarios[state.scenarioIndex].id,
+        company: selectedCompany(),
+        difficulty: state.difficulty,
+        mode: state.mode,
+        elapsedMs: state.elapsed
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Feedback could not be sent.");
+    els.feedbackForm.querySelectorAll("input, textarea, button").forEach((control) => { control.disabled = true; });
+    els.feedbackStatus.textContent = "Thank you—your feedback was sent.";
+  } catch (error) {
+    els.submitFeedback.disabled = false;
+    els.feedbackStatus.textContent = error.message || "Feedback could not be sent. Please try again.";
+  }
 }
 
 function appendScoreRow(row, container = els.scoreRows) {
