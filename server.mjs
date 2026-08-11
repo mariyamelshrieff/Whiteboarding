@@ -235,6 +235,7 @@ async function createBehaviorSession(request, response) {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
+      "OAI-Sites-Authorization": `Bearer ${token}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
