@@ -1640,6 +1640,7 @@ function handleRealtimeEvent(message) {
         renderAskInterviewer();
       }
       state.loggedCandidateItems.add(event.item_id || text);
+      setListeningState("heard", "Heard you", "Your words were captured successfully.");
       state.transcriptText = `${state.transcriptText} ${text}`.trim();
       recordTranscriptTurn("candidate", text, { realtimeItemId: event.item_id || "" });
       logMessage("candidate", text);
@@ -1665,11 +1666,15 @@ function handleRealtimeEvent(message) {
   if (event.type === "response.created") {
     state.realtimeResponseActive = true;
     state.interviewerDraft = "";
+    setListeningState("thinking", "Thinking", "The interviewer is preparing a response.");
     setMicrophoneCapture(false);
     updateInterviewerState();
     return;
   }
   if (isRealtimeTextDelta(event)) {
+    if (!state.interviewerDraft) {
+      setListeningState("responding", "Responding", "The interviewer is generating a response.");
+    }
     state.interviewerDraft += event.delta || "";
     // Response progress keeps the inactivity watchdog alive. A healthy longer
     // sentence must not be treated as a stalled model response.
@@ -1738,7 +1743,8 @@ function handleRealtimeEvent(message) {
     state.realtimeResponseActive = false;
     state.realtimeResponseRequested = false;
     state.interviewerDraft = "";
-    resumeMicrophoneAfterResponse();
+    setListeningState("response-delayed", "Response delayed", "The interviewer could not complete the response. Try again.");
+    resumeMicrophoneAfterResponse(5000);
     if (responseMeta?.fallbackText && !state.openingResponsePending) {
       deliverRealtimeResponseFallback(responseMeta.fallbackText, message || "The live interviewer could not finish the answer.");
       flushQueuedRealtimeResponse();
@@ -2702,12 +2708,14 @@ function requestRealtimeResponse(instructions, options = {}) {
     }
   });
   if (!sent) {
+    setListeningState("response-delayed", "Response delayed", "The interviewer could not start a response. Try again.");
     state.realtimeResponseRequested = false;
     state.realtimeResponseActive = false;
     state.realtimeResponseMeta = null;
     resumeMicrophoneAfterResponse();
     return false;
   }
+  setListeningState("thinking", "Thinking", "The interviewer is preparing a response.");
   state.modelCallCount += 1;
   armRealtimeResponseWatchdog(state.realtimeResponseMeta);
   renderCallCounter();
@@ -2727,6 +2735,7 @@ function armRealtimeResponseWatchdog(meta) {
     state.interviewerDraft = "";
     const draft = els.interviewerLog.querySelector("[data-draft='true']");
     if (draft) draft.remove();
+    setListeningState("response-delayed", "Response delayed", "The interviewer took too long to answer. Try again.");
     if (meta.fallbackText) {
       deliverRealtimeResponseFallback(meta.fallbackText, "The live interviewer took too long to answer.");
     } else if (state.openingResponsePending) {
@@ -2737,7 +2746,7 @@ function armRealtimeResponseWatchdog(meta) {
       logMessage("system", failure);
       announce(failure);
     }
-    resumeMicrophoneAfterResponse();
+    resumeMicrophoneAfterResponse(5000);
     flushQueuedRealtimeResponse();
   }, 30000);
 }
@@ -2795,7 +2804,7 @@ function setMicrophoneCapture(enabled) {
   });
 }
 
-function resumeMicrophoneAfterResponse() {
+function resumeMicrophoneAfterResponse(minimumDelay = 0) {
   clearTimeout(microphoneResumeTimer);
   const remainingPlaybackGuard = Math.max(0, state.interviewerPlaybackGuardUntil - Date.now());
   microphoneResumeTimer = window.setTimeout(() => {
@@ -2804,7 +2813,7 @@ function resumeMicrophoneAfterResponse() {
       setMicrophoneCapture(true);
       setListeningState("listening", "Interviewer listening", "Think out loud, or press Ask interviewer for a direct response.");
     }
-  }, Math.max(900, remainingPlaybackGuard));
+  }, Math.max(900, remainingPlaybackGuard, minimumDelay));
 }
 
 function rememberInterviewerPlayback(text) {
@@ -3123,15 +3132,22 @@ function dismissProcessNudge() {
 function setListeningState(kind, title, detail) {
   document.body.dataset.listening = kind;
   const compactVoiceLabels = {
-    idle: "Mic",
-    requesting: "Connecting",
-    listening: "Mic on",
-    receiving: "Mic on",
-    "no-speech": "Mic on",
-    fallback: "Retry mic",
+    idle: "Mic ready",
+    requesting: "Connecting…",
+    listening: "Listening…",
+    receiving: "Listening…",
+    heard: "Heard you",
+    thinking: "Thinking…",
+    responding: "Responding…",
+    "no-speech": "I didn’t catch that",
+    "response-delayed": "Response delayed — try again",
+    fallback: "Try again",
     ended: "Mic off"
   };
-  els.voiceStatus.textContent = compactVoiceLabels[kind] || "Mic";
+  const voiceLabel = compactVoiceLabels[kind] || "Mic ready";
+  els.voiceStatus.textContent = voiceLabel;
+  els.voiceToggle.dataset.voiceState = kind;
+  els.voiceToggle.setAttribute("aria-label", `Pause or resume listening. Status: ${voiceLabel}`);
   els.listeningTitle.textContent = title;
   els.micHelp.textContent = detail;
   if (!currentTranscriptText()) {
