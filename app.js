@@ -3091,37 +3091,8 @@ function dismissAskExplainer() {
 }
 
 function maybeShowProcessNudge() {
-  if (!state.started || state.ended || state.activeNudge || !els.voiceError?.hidden) return;
-  const candidateText = state.transcript.filter((turn) => turn.role === "candidate").map((turn) => turn.text).join(" ").toLowerCase();
-  const boardLabels = state.boardElements.filter((element) => element.text).length;
-  const nudges = [
-    {
-      key: "framing",
-      after: 4 * 60 * 1000,
-      missing: !/\b(problem|goal|scope|success|user need|trying to)\b/.test(candidateText),
-      text: "Process check: briefly state the problem, primary user, scope, and success signal before going deeper."
-    },
-    {
-      key: "annotations",
-      after: 6 * 60 * 1000,
-      missing: state.boardElements.length > 0 && boardLabels === 0,
-      text: "Your board has structure but no labels yet. Add short annotations so the reasoning and flow remain legible."
-    },
-    {
-      key: "user",
-      after: 8 * 60 * 1000,
-      missing: !/\b(user|customer|person|people|audience|persona|technician|admin|traveler)\b/.test(candidateText),
-      text: "User check: name the primary user and the need or context driving your decisions."
-    }
-  ];
-  const nudge = nudges.find((item) => state.elapsed >= item.after && item.missing && !state.shownNudges.has(item.key));
-  if (!nudge) return;
-  state.shownNudges.add(nudge.key);
-  state.activeNudge = nudge.key;
-  els.processNudgeText.textContent = nudge.text;
-  els.processNudge.hidden = false;
-  window.clearTimeout(infoToastTimer);
-  infoToastTimer = window.setTimeout(dismissProcessNudge, 6000);
+  // Unsolicited coaching banners are intentionally disabled so the candidate
+  // can stay focused on the whiteboard and interviewer.
 }
 
 function dismissProcessNudge() {
@@ -3134,7 +3105,7 @@ function dismissProcessNudge() {
 function setListeningState(kind, title, detail) {
   document.body.dataset.listening = kind;
   const compactVoiceLabels = {
-    idle: "Mic ready",
+    idle: "AI ready",
     requesting: "Connecting…",
     listening: "Listening…",
     receiving: "Listening…",
@@ -3146,10 +3117,10 @@ function setListeningState(kind, title, detail) {
     fallback: "Try again",
     ended: "Mic off"
   };
-  const voiceLabel = compactVoiceLabels[kind] || "Mic ready";
+  const voiceLabel = compactVoiceLabels[kind] || "AI ready";
   els.voiceStatus.textContent = voiceLabel;
   els.voiceToggle.dataset.voiceState = kind;
-  els.voiceToggle.setAttribute("aria-label", `Pause or resume listening. Status: ${voiceLabel}`);
+  els.voiceToggle.setAttribute("aria-label", `AI status: ${voiceLabel}. Click to pause or resume listening.`);
   els.listeningTitle.textContent = title;
   els.micHelp.textContent = detail;
   if (!currentTranscriptText()) {
