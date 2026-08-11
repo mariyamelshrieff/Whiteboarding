@@ -1048,22 +1048,45 @@ body[data-session="running"] .statusbar {
 .statusbar #micHelp,
 .statusbar #heardPreview,
 .statusbar .listening-panel > div:last-child,
-.statusbar #voiceStatus,
 .statusbar .ask-explainer {
   display: none !important;
+}
+
+.statusbar #voiceStatus {
+  display: inline !important;
+  white-space: nowrap;
 }
 
 .statusbar .listening-indicator {
   margin: 0 6px;
 }
 
-.statusbar .mic-toggle,
+.statusbar .mic-toggle {
+  display: inline-flex !important;
+  width: auto;
+  min-width: 34px;
+  max-width: min(240px, 42vw);
+  gap: var(--space-2);
+  padding: 0 var(--space-3) !important;
+  align-items: center;
+  justify-content: center;
+}
+
 .statusbar .interviewer-state {
   display: inline-grid !important;
   width: 34px;
   min-width: 34px;
   padding: 0 !important;
   place-items: center;
+}
+
+.statusbar .mic-toggle[data-voice-state="no-speech"],
+.statusbar .mic-toggle[data-voice-state="response-delayed"] {
+  color: var(--danger-text);
+}
+
+.statusbar .mic-toggle[data-voice-state="heard"] {
+  color: var(--success-text);
 }
 
 /* Keep the audio toggle in the same neutral/selected language as the shell. */
