@@ -1492,6 +1492,18 @@ body[data-session="running"] .statusbar .phase-summary {
 .feedback-submit-row p { margin: 0; color: var(--ink-muted); }
 .feedback-honeypot { position: absolute !important; left: -10000px !important; width: 1px !important; height: 1px !important; }
 
+.feedback-confirmation {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0 4px;
+  outline: none;
+}
+
+.feedback-confirmation[hidden] { display: none; }
+.feedback-confirmation h3,
+.feedback-confirmation p { margin: 0; }
+.feedback-confirmation > p:last-child { color: var(--ink-muted); }
+
 .report-summary-section {
   display: grid;
   gap: 16px;
