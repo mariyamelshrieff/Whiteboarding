@@ -847,7 +847,7 @@ function bindEvents() {
   });
   els.voiceToggle.addEventListener("click", (event) => {
     event.preventDefault();
-    if (state.started && !state.ended && !state.listening && !state.realtimeConnecting) startListening();
+    if (state.started && !state.ended) toggleVoice();
   });
   els.interviewerState.addEventListener("click", toggleInterviewerMute);
   els.askInterviewer.addEventListener("click", armDirectQuestion);
@@ -1479,9 +1479,11 @@ function stopListening() {
   state.voiceRunId += 1;
   state.listening = false;
   clearNoSpeechTimer();
+  setMicrophoneCapture(false);
   setListeningState(
-    state.ended ? "ended" : "Interviewer disconnected",
-    state.ended ? "Session complete" : "Start again to reconnect the interviewer."
+    state.ended ? "ended" : "paused",
+    state.ended ? "Session complete" : "Listening paused",
+    state.ended ? "The interview is complete." : "Your microphone is paused. Select the AI pulse to resume."
   );
   els.voiceToggle.classList.remove("listening");
   disconnectRealtime();
@@ -2153,6 +2155,15 @@ function shouldInterviewerRespondTo(text) {
 }
 
 function routeCandidateTurn(text, options = {}) {
+  if (isLikelySimulatorFeedback(text)) {
+    const challenge = scenarios[state.scenarioIndex].prompt;
+    const mismatchResponse = `I may have lost the thread. Are you giving feedback about this simulator, or continuing the challenge: “${challenge}”?`;
+    const instruction = `The candidate appears to be discussing the simulator interface rather than solving the assigned challenge. Do not treat their words as challenge reasoning. Say exactly: ${JSON.stringify(mismatchResponse)}`;
+    if (options.local) respond(mismatchResponse, false, { force: true, localVoice: true });
+    else if (!requestRealtimeResponse(instruction, { force: true, fallbackText: mismatchResponse })) respond(mismatchResponse, false, { force: true, localVoice: true });
+    return;
+  }
+
   if (isRepeatRequest(text)) {
     const previousAnswer = lastInterviewerTurnText();
     if (!previousAnswer) {
@@ -2231,6 +2242,25 @@ function routeCandidateTurn(text, options = {}) {
 
   if (options.local) setSilent();
   else setInterviewerState("Listening");
+}
+
+function isLikelySimulatorFeedback(text = "") {
+  const normalized = String(text).toLowerCase();
+  const strongSignals = [
+    "whiteboard simulator",
+    "this simulator",
+    "this app",
+    "ai pulse",
+    "mic state",
+    "microphone icon",
+    "mute button",
+    "interface feedback",
+    "as we talked about before"
+  ];
+  const signalCount = strongSignals.filter((signal) => normalized.includes(signal)).length;
+  const productFeedbackLanguage = /\b(replace|change|remove|redesign|button|icon|ui|interface)\b/.test(normalized);
+  const sessionMechanics = /\b(mic|microphone|mute|listening|thinking|rendering|transcribing)\b/.test(normalized);
+  return signalCount >= 1 && (productFeedbackLanguage || sessionMechanics);
 }
 
 function registerAnsweredQuestion(text) {
@@ -2944,6 +2974,7 @@ Rules of engagement:
 - The highest-value uncovered section is currently: ${currentFrameworkStep().label}. Stay with the candidate's reasoning, then use this as the next nudge only when it is genuinely missing.
 - At a transition, say the next section name once in natural language and ask one opening question. Do not recite the full framework and do not repeatedly call this an "interview scenario."
 - Converge instead of expanding the story. Each turn should narrow the user, outcome, priority, or solution decision for the same challenge.
+- If the candidate starts discussing a different problem, another product, or feedback about this simulator, do not absorb it into the assigned challenge. Say that the context appears mismatched and ask whether they want to return to the assigned challenge.
 - Once the primary user, goal, platform, success definition, or core problem has been established, never replace it, rename it, or introduce a competing version later.
 - The canonical identity locks above are stronger than generic examples in these instructions. Examples must never introduce a different audience or product context.
 - When a candidate repeats a factual question, give the same established answer in shorter language. Do not generate a new stakeholder, domain, product, goal, metric, or backstory.
@@ -3110,6 +3141,7 @@ function setListeningState(kind, title, detail) {
     listening: "Listening…",
     receiving: "Listening…",
     heard: "Heard you",
+    paused: "Listening paused",
     thinking: "Thinking…",
     responding: "Responding…",
     "no-speech": "I didn’t catch that",
@@ -3570,11 +3602,13 @@ function toggleInterviewerMute() {
 }
 
 function renderInterviewerMute() {
-  const action = state.interviewerMuted ? "Unmute interviewer audio" : "Mute interviewer audio";
+  const action = state.interviewerMuted ? "Turn AI voice on" : "Mute AI voice";
   els.interviewerState.classList.toggle("is-muted", state.interviewerMuted);
   els.interviewerState.setAttribute("aria-pressed", String(state.interviewerMuted));
   els.interviewerState.setAttribute("aria-label", action);
-  els.interviewerState.title = `${action} · ${state.interviewerActivity}`;
+  els.interviewerState.title = `${action} · This controls AI audio, not your microphone`;
+  const iconUse = els.interviewerState.querySelector("use");
+  if (iconUse) iconUse.setAttribute("href", state.interviewerMuted ? "./lucide-sprite.svg#volume-x" : "./lucide-sprite.svg#volume-2");
   const accessibleLabel = els.interviewerState.querySelector(".sr-only");
   if (accessibleLabel) accessibleLabel.textContent = action;
 }
