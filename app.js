@@ -443,6 +443,9 @@ const state = {
   mode: "full",
   started: false,
   ended: false,
+  sessionId: "",
+  sessionStartedAt: 0,
+  behaviorSessionSent: false,
   transcript: [],
   publicTrialId: "",
   runningSummary: "",
@@ -995,6 +998,9 @@ function startSession() {
   if (state.ended) resetSession();
   state.started = true;
   state.publicTrialId = globalThis.crypto?.randomUUID?.() || `trial_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  state.sessionId = globalThis.crypto?.randomUUID?.() || `session_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  state.sessionStartedAt = Date.now();
+  state.behaviorSessionSent = false;
   state.ended = false;
   state.lastPhaseChangeAt = 0;
   state.phaseHistory = [{ id: currentPhase().id, label: currentPhase().label, startedAt: 0, endedAt: null }];
@@ -1043,8 +1049,77 @@ function endSession(options = {}) {
   state.autosaveTimer = null;
   stopListening();
   showDebrief();
+  void sendBehaviorSession();
   clearSessionSnapshot();
   render();
+}
+
+async function sendBehaviorSession() {
+  if (state.behaviorSessionSent || !state.sessionId || !state.sessionStartedAt) return;
+  state.behaviorSessionSent = true;
+  const eventId = () => globalThis.crypto?.randomUUID?.() || `event_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const events = [
+    {
+      id: eventId(),
+      name: "session.started",
+      occurredAt: new Date(state.sessionStartedAt).toISOString(),
+      sequence: 0,
+      payload: { company: selectedCompany(), difficulty: state.difficulty, mode: state.mode }
+    },
+    ...state.transcript.map((turn, index) => ({
+      id: eventId(),
+      name: turn.role === "candidate" ? "candidate.turn" : turn.role === "interviewer" ? "interviewer.response" : "system.event",
+      occurredAt: new Date(state.sessionStartedAt + Math.max(0, Number(turn.at) || 0)).toISOString(),
+      sequence: index + 1,
+      payload: {
+        role: turn.role,
+        text: String(turn.text || "").slice(0, 4000),
+        responseFailure: Boolean(turn.responseFailure),
+        captureFailure: Boolean(turn.captureFailure),
+        delivery: turn.delivery || ""
+      }
+    })),
+    ...state.canvasCheckpoints.map((checkpoint, index) => ({
+      id: eventId(),
+      name: "canvas.checkpoint",
+      occurredAt: new Date(state.sessionStartedAt + Math.max(0, Number(checkpoint.at) || 0)).toISOString(),
+      sequence: state.transcript.length + index + 1,
+      payload: {
+        reason: checkpoint.reason || "periodic",
+        summary: String(checkpoint.summary || checkpoint.sceneSummary || state.boardSummary || "").slice(0, 2000),
+        elementCount: Number(checkpoint.elementCount || checkpoint.elements?.length || 0)
+      }
+    })),
+    {
+      id: eventId(),
+      name: "session.completed",
+      occurredAt: new Date().toISOString(),
+      sequence: state.transcript.length + state.canvasCheckpoints.length + 1,
+      payload: { elapsedMs: state.elapsed, modelCallCount: state.modelCallCount, phase: currentPhase().id }
+    }
+  ].map((event, sequence) => ({ ...event, sequence }));
+
+  try {
+    const response = await fetch("/behavior-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({
+        id: state.sessionId,
+        status: "completed",
+        challengeId: scenarios[state.scenarioIndex].id,
+        interviewerVersion: "render-migration",
+        model: "gpt-realtime-2",
+        startedAt: new Date(state.sessionStartedAt).toISOString(),
+        endedAt: new Date().toISOString(),
+        events
+      })
+    });
+    if (!response.ok) throw new Error("Behavior session could not be stored.");
+  } catch (error) {
+    state.behaviorSessionSent = false;
+    console.warn("Behavior session collection failed", error);
+  }
 }
 
 function resetSession() {
@@ -1056,6 +1131,9 @@ function resetSession() {
   Object.assign(state, {
     started: false,
     ended: false,
+    sessionId: "",
+    sessionStartedAt: 0,
+    behaviorSessionSent: false,
     transcript: [],
     publicTrialId: "",
     runningSummary: "",
