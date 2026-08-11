@@ -606,6 +606,7 @@ const els = {
   feedbackForm: document.querySelector("#feedbackForm"),
   feedbackComment: document.querySelector("#feedbackComment"),
   feedbackStatus: document.querySelector("#feedbackStatus"),
+  feedbackThanks: document.querySelector("#feedbackThanks"),
   submitFeedback: document.querySelector("#submitFeedback"),
   askExplainer: document.querySelector("#askExplainer"),
   dismissAskExplainer: document.querySelector("#dismissAskExplainer"),
@@ -3747,7 +3748,12 @@ async function submitSessionFeedback(event) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || "Feedback could not be sent.");
     els.feedbackForm.querySelectorAll("input, textarea, button").forEach((control) => { control.disabled = true; });
-    els.feedbackStatus.textContent = "Thank you—your feedback was sent.";
+    els.feedbackStatus.textContent = "";
+    els.feedbackForm.hidden = true;
+    if (els.feedbackThanks) {
+      els.feedbackThanks.hidden = false;
+      els.feedbackThanks.focus();
+    }
   } catch (error) {
     els.submitFeedback.disabled = false;
     els.feedbackStatus.textContent = error.message || "Feedback could not be sent. Please try again.";
