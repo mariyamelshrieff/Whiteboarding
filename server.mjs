@@ -43,6 +43,10 @@ createServer(async (request, response) => {
       await createFeedback(request, response);
       return;
     }
+    if (url.pathname === "/behavior-session") {
+      await createBehaviorSession(request, response);
+      return;
+    }
     serveStatic(url.pathname, response);
   } catch (error) {
     sendJson(response, 500, { error: error.message || "Server error." });
@@ -209,6 +213,44 @@ async function createFeedback(request, response) {
   feedbackRateLimits.set(clientId, [...recent, now]);
   response.setHeader("Cache-Control", "no-store");
   sendJson(response, 201, { accepted: true });
+}
+
+async function createBehaviorSession(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { error: "Use POST for /behavior-session." });
+    return;
+  }
+  const token = process.env.BEHAVIOR_LAB_INGEST_TOKEN;
+  const ingestUrl = process.env.BEHAVIOR_LAB_INGEST_URL || "https://whiteboard-ai-behavior-lab.mariyamelshrieff.chatgpt.site/api/ingest";
+  if (!token) {
+    sendJson(response, 503, { error: "Behavior session collection is not configured." });
+    return;
+  }
+  const body = await readJson(request, 256 * 1024);
+  if (!body.id || !Array.isArray(body.events) || body.events.length > 500) {
+    sendJson(response, 400, { error: "Invalid behavior session." });
+    return;
+  }
+  const ingestResponse = await fetch(ingestUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      ...body,
+      source: "whiteboard_render",
+      participantId: undefined,
+      deploymentId: process.env.RENDER_GIT_COMMIT || "render"
+    })
+  });
+  const result = await ingestResponse.json().catch(() => ({}));
+  if (!ingestResponse.ok) {
+    sendJson(response, 502, { error: result.error || "Behavior Studio rejected the session." });
+    return;
+  }
+  response.setHeader("Cache-Control", "no-store");
+  sendJson(response, 201, { stored: true, sessionId: result.sessionId || body.id });
 }
 
 function serveStatic(pathname, response) {
