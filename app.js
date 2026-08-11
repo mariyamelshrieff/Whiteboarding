@@ -2857,6 +2857,8 @@ function attachRemoteAudio(stream) {
   const audio = document.createElement("audio");
   audio.autoplay = true;
   audio.playsInline = true;
+  audio.defaultPlaybackRate = 1;
+  audio.playbackRate = 1;
   audio.muted = state.interviewerMuted;
   audio.srcObject = stream;
   document.body.appendChild(audio);
@@ -3543,7 +3545,7 @@ function speakInterviewerText(text) {
   if (state.interviewerMuted) return;
   rememberInterviewerPlayback(text);
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.92;
+  utterance.rate = 1;
   utterance.pitch = 1;
   utterance.volume = 1;
   utterance.onend = updateInterviewerState;
