@@ -245,9 +245,19 @@ async function createBehaviorSession(request, response) {
       deploymentId: process.env.RENDER_GIT_COMMIT || "render"
     })
   });
-  const result = await ingestResponse.json().catch(() => ({}));
+  const ingestText = await ingestResponse.text();
+  let result = {};
+  try {
+    result = ingestText ? JSON.parse(ingestText) : {};
+  } catch {
+    result = {};
+  }
   if (!ingestResponse.ok) {
-    sendJson(response, 502, { error: result.error || "Behavior Studio rejected the session." });
+    const responseType = ingestResponse.headers.get("content-type") || "unknown";
+    console.error("Behavior session ingest rejected", { status: ingestResponse.status, responseType });
+    sendJson(response, 502, {
+      error: result.error || `Behavior Studio rejected the session (HTTP ${ingestResponse.status}, ${responseType}).`
+    });
     return;
   }
   response.setHeader("Cache-Control", "no-store");
