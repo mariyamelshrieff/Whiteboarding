@@ -221,8 +221,9 @@ async function createBehaviorSession(request, response) {
     return;
   }
   const token = process.env.BEHAVIOR_LAB_INGEST_TOKEN;
+  const sitesToken = process.env.BEHAVIOR_LAB_SITES_TOKEN;
   const ingestUrl = process.env.BEHAVIOR_LAB_INGEST_URL || "https://whiteboard-ai-behavior-lab.mariyamelshrieff.chatgpt.site/api/ingest";
-  if (!token) {
+  if (!token || !sitesToken) {
     sendJson(response, 503, { error: "Behavior session collection is not configured." });
     return;
   }
@@ -235,7 +236,7 @@ async function createBehaviorSession(request, response) {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "OAI-Sites-Authorization": `Bearer ${token}`,
+      "OAI-Sites-Authorization": `Bearer ${sitesToken}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
