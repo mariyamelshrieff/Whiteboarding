@@ -232,6 +232,7 @@ async function createBehaviorSession(request, response) {
     sendJson(response, 400, { error: "Invalid behavior session." });
     return;
   }
+  const sessionSource = body.source === "render_connection_test" ? "studio_connection_test" : "whiteboard_render";
   const ingestResponse = await fetch(ingestUrl, {
     method: "POST",
     headers: {
@@ -241,7 +242,7 @@ async function createBehaviorSession(request, response) {
     },
     body: JSON.stringify({
       ...body,
-      source: "whiteboard_render",
+      source: sessionSource,
       participantId: undefined,
       deploymentId: process.env.RENDER_GIT_COMMIT || "render"
     })
@@ -261,8 +262,10 @@ async function createBehaviorSession(request, response) {
     });
     return;
   }
+  const storedSessionId = result.sessionId || body.id;
+  console.log("Behavior session stored", { sessionId: storedSessionId, source: sessionSource });
   response.setHeader("Cache-Control", "no-store");
-  sendJson(response, 201, { stored: true, sessionId: result.sessionId || body.id });
+  sendJson(response, 201, { stored: true, sessionId: storedSessionId });
 }
 
 function serveStatic(pathname, response) {
