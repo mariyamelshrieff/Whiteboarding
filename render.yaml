@@ -24,3 +24,5 @@ services:
         value: https://whiteboard-ai-behavior-lab.mariyamelshrieff.chatgpt.site/api/ingest
       - key: BEHAVIOR_LAB_INGEST_TOKEN
         sync: false
+      - key: BEHAVIOR_LAB_SITES_TOKEN
+        sync: false
