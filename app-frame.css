@@ -1170,6 +1170,7 @@ body[data-session="running"] .statusbar {
   min-width: 34px;
   padding: 0 !important;
   place-items: center;
+  animation: none !important;
 }
 
 .statusbar .mic-toggle[data-voice-state="no-speech"],
@@ -1184,9 +1185,9 @@ body[data-session="running"] .statusbar {
 /* Keep the audio toggle in the same neutral/selected language as the shell. */
 .statusbar #interviewerState,
 .statusbar #interviewerState:hover {
-  border: 1px solid var(--border-subtle) !important;
-  background: var(--surface-1) !important;
-  color: var(--text-2) !important;
+  border: 1px solid var(--border-strong) !important;
+  background: var(--surface-2) !important;
+  color: var(--text-1) !important;
   transform: none !important;
 }
 
@@ -1199,13 +1200,29 @@ body[data-session="running"] .statusbar {
 .statusbar #interviewerState.is-muted,
 .statusbar #interviewerState.is-muted:hover,
 .statusbar #interviewerState[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-subtle)) !important;
-  background: var(--accent-subtle) !important;
-  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: var(--on-dark) !important;
 }
 
 .statusbar #interviewerState .shell-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
   color: currentColor !important;
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+.statusbar #interviewerState .audio-off-icon,
+.statusbar #interviewerState.is-muted .audio-on-icon,
+.statusbar #interviewerState[aria-pressed="true"] .audio-on-icon {
+  display: none;
+}
+
+.statusbar #interviewerState.is-muted .audio-off-icon,
+.statusbar #interviewerState[aria-pressed="true"] .audio-off-icon {
+  display: block;
 }
 
 .capsule-start {
