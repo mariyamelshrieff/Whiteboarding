@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";\nimport { runInNewContext } from "node:vm";
+import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import test from "node:test";
 
 test("header controls follow setup, workspace, and session groups", async () => {
