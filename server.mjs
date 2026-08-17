@@ -43,6 +43,10 @@ createServer(async (request, response) => {
       await createFeedback(request, response);
       return;
     }
+    if (url.pathname === "/behavior-session") {
+      await createBehaviorSession(request, response);
+      return;
+    }
     serveStatic(url.pathname, response);
   } catch (error) {
     sendJson(response, 500, { error: error.message || "Server error." });
@@ -209,6 +213,59 @@ async function createFeedback(request, response) {
   feedbackRateLimits.set(clientId, [...recent, now]);
   response.setHeader("Cache-Control", "no-store");
   sendJson(response, 201, { accepted: true });
+}
+
+async function createBehaviorSession(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { error: "Use POST for /behavior-session." });
+    return;
+  }
+  const token = process.env.BEHAVIOR_LAB_INGEST_TOKEN;
+  const sitesToken = process.env.BEHAVIOR_LAB_SITES_TOKEN;
+  const ingestUrl = process.env.BEHAVIOR_LAB_INGEST_URL || "https://whiteboard-ai-behavior-lab.mariyamelshrieff.chatgpt.site/api/ingest";
+  if (!token || !sitesToken) {
+    sendJson(response, 503, { error: "Behavior session collection is not configured." });
+    return;
+  }
+  const body = await readJson(request, 256 * 1024);
+  if (!body.id || !Array.isArray(body.events) || body.events.length > 500) {
+    sendJson(response, 400, { error: "Invalid behavior session." });
+    return;
+  }
+  const sessionSource = body.source === "render_connection_test" ? "studio_connection_test" : "whiteboard_render";
+  const ingestResponse = await fetch(ingestUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "OAI-Sites-Authorization": `Bearer ${sitesToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      ...body,
+      source: sessionSource,
+      participantId: undefined,
+      deploymentId: process.env.RENDER_GIT_COMMIT || "render"
+    })
+  });
+  const ingestText = await ingestResponse.text();
+  let result = {};
+  try {
+    result = ingestText ? JSON.parse(ingestText) : {};
+  } catch {
+    result = {};
+  }
+  if (!ingestResponse.ok) {
+    const responseType = ingestResponse.headers.get("content-type") || "unknown";
+    console.error("Behavior session ingest rejected", { status: ingestResponse.status, responseType });
+    sendJson(response, 502, {
+      error: result.error || `Behavior Studio rejected the session (HTTP ${ingestResponse.status}, ${responseType}).`
+    });
+    return;
+  }
+  const storedSessionId = result.sessionId || body.id;
+  console.log("Behavior session stored", { sessionId: storedSessionId, source: sessionSource });
+  response.setHeader("Cache-Control", "no-store");
+  sendJson(response, 201, { stored: true, sessionId: storedSessionId });
 }
 
 function serveStatic(pathname, response) {

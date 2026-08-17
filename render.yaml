@@ -20,3 +20,9 @@ services:
         value: gpt-5-mini
       - key: TRIAL_SIGNING_SECRET
         generateValue: true
+      - key: BEHAVIOR_LAB_INGEST_URL
+        value: https://whiteboard-ai-behavior-lab.mariyamelshrieff.chatgpt.site/api/ingest
+      - key: BEHAVIOR_LAB_INGEST_TOKEN
+        sync: false
+      - key: BEHAVIOR_LAB_SITES_TOKEN
+        sync: false

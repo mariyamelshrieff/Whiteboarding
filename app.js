@@ -443,6 +443,9 @@ const state = {
   mode: "full",
   started: false,
   ended: false,
+  sessionId: "",
+  sessionStartedAt: 0,
+  behaviorSessionSent: false,
   transcript: [],
   publicTrialId: "",
   runningSummary: "",
@@ -606,6 +609,7 @@ const els = {
   feedbackForm: document.querySelector("#feedbackForm"),
   feedbackComment: document.querySelector("#feedbackComment"),
   feedbackStatus: document.querySelector("#feedbackStatus"),
+  feedbackThanks: document.querySelector("#feedbackThanks"),
   submitFeedback: document.querySelector("#submitFeedback"),
   askExplainer: document.querySelector("#askExplainer"),
   dismissAskExplainer: document.querySelector("#dismissAskExplainer"),
@@ -843,7 +847,7 @@ function bindEvents() {
   });
   els.voiceToggle.addEventListener("click", (event) => {
     event.preventDefault();
-    if (state.started && !state.ended && !state.listening && !state.realtimeConnecting) startListening();
+    if (state.started && !state.ended) toggleVoice();
   });
   els.interviewerState.addEventListener("click", toggleInterviewerMute);
   els.askInterviewer.addEventListener("click", armDirectQuestion);
@@ -994,6 +998,9 @@ function startSession() {
   if (state.ended) resetSession();
   state.started = true;
   state.publicTrialId = globalThis.crypto?.randomUUID?.() || `trial_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  state.sessionId = globalThis.crypto?.randomUUID?.() || `session_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  state.sessionStartedAt = Date.now();
+  state.behaviorSessionSent = false;
   state.ended = false;
   state.lastPhaseChangeAt = 0;
   state.phaseHistory = [{ id: currentPhase().id, label: currentPhase().label, startedAt: 0, endedAt: null }];
@@ -1042,8 +1049,77 @@ function endSession(options = {}) {
   state.autosaveTimer = null;
   stopListening();
   showDebrief();
+  void sendBehaviorSession();
   clearSessionSnapshot();
   render();
+}
+
+async function sendBehaviorSession() {
+  if (state.behaviorSessionSent || !state.sessionId || !state.sessionStartedAt) return;
+  state.behaviorSessionSent = true;
+  const eventId = () => globalThis.crypto?.randomUUID?.() || `event_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const events = [
+    {
+      id: eventId(),
+      name: "session.started",
+      occurredAt: new Date(state.sessionStartedAt).toISOString(),
+      sequence: 0,
+      payload: { company: selectedCompany(), difficulty: state.difficulty, mode: state.mode }
+    },
+    ...state.transcript.map((turn, index) => ({
+      id: eventId(),
+      name: turn.role === "candidate" ? "candidate.turn" : turn.role === "interviewer" ? "interviewer.response" : "system.event",
+      occurredAt: new Date(state.sessionStartedAt + Math.max(0, Number(turn.at) || 0)).toISOString(),
+      sequence: index + 1,
+      payload: {
+        role: turn.role,
+        text: String(turn.text || "").slice(0, 4000),
+        responseFailure: Boolean(turn.responseFailure),
+        captureFailure: Boolean(turn.captureFailure),
+        delivery: turn.delivery || ""
+      }
+    })),
+    ...state.canvasCheckpoints.map((checkpoint, index) => ({
+      id: eventId(),
+      name: "canvas.checkpoint",
+      occurredAt: new Date(state.sessionStartedAt + Math.max(0, Number(checkpoint.at) || 0)).toISOString(),
+      sequence: state.transcript.length + index + 1,
+      payload: {
+        reason: checkpoint.reason || "periodic",
+        summary: String(checkpoint.summary || checkpoint.sceneSummary || state.boardSummary || "").slice(0, 2000),
+        elementCount: Number(checkpoint.elementCount || checkpoint.elements?.length || 0)
+      }
+    })),
+    {
+      id: eventId(),
+      name: "session.completed",
+      occurredAt: new Date().toISOString(),
+      sequence: state.transcript.length + state.canvasCheckpoints.length + 1,
+      payload: { elapsedMs: state.elapsed, modelCallCount: state.modelCallCount, phase: currentPhase().id }
+    }
+  ].map((event, sequence) => ({ ...event, sequence }));
+
+  try {
+    const response = await fetch("/behavior-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({
+        id: state.sessionId,
+        status: "completed",
+        challengeId: scenarios[state.scenarioIndex].id,
+        interviewerVersion: "render-migration",
+        model: "gpt-realtime-2",
+        startedAt: new Date(state.sessionStartedAt).toISOString(),
+        endedAt: new Date().toISOString(),
+        events
+      })
+    });
+    if (!response.ok) throw new Error("Behavior session could not be stored.");
+  } catch (error) {
+    state.behaviorSessionSent = false;
+    console.warn("Behavior session collection failed", error);
+  }
 }
 
 function resetSession() {
@@ -1055,6 +1131,9 @@ function resetSession() {
   Object.assign(state, {
     started: false,
     ended: false,
+    sessionId: "",
+    sessionStartedAt: 0,
+    behaviorSessionSent: false,
     transcript: [],
     publicTrialId: "",
     runningSummary: "",
@@ -1400,9 +1479,11 @@ function stopListening() {
   state.voiceRunId += 1;
   state.listening = false;
   clearNoSpeechTimer();
+  setMicrophoneCapture(false);
   setListeningState(
-    state.ended ? "ended" : "Interviewer disconnected",
-    state.ended ? "Session complete" : "Start again to reconnect the interviewer."
+    state.ended ? "ended" : "paused",
+    state.ended ? "Session complete" : "Listening paused",
+    state.ended ? "The interview is complete." : "Your microphone is paused. Select the AI pulse to resume."
   );
   els.voiceToggle.classList.remove("listening");
   disconnectRealtime();
@@ -1561,6 +1642,7 @@ function handleRealtimeEvent(message) {
         renderAskInterviewer();
       }
       state.loggedCandidateItems.add(event.item_id || text);
+      setListeningState("heard", "Heard you", "Your words were captured successfully.");
       state.transcriptText = `${state.transcriptText} ${text}`.trim();
       recordTranscriptTurn("candidate", text, { realtimeItemId: event.item_id || "" });
       logMessage("candidate", text);
@@ -1586,11 +1668,15 @@ function handleRealtimeEvent(message) {
   if (event.type === "response.created") {
     state.realtimeResponseActive = true;
     state.interviewerDraft = "";
+    setListeningState("thinking", "Thinking", "The interviewer is preparing a response.");
     setMicrophoneCapture(false);
     updateInterviewerState();
     return;
   }
   if (isRealtimeTextDelta(event)) {
+    if (!state.interviewerDraft) {
+      setListeningState("responding", "Responding", "The interviewer is generating a response.");
+    }
     state.interviewerDraft += event.delta || "";
     // Response progress keeps the inactivity watchdog alive. A healthy longer
     // sentence must not be treated as a stalled model response.
@@ -1659,7 +1745,8 @@ function handleRealtimeEvent(message) {
     state.realtimeResponseActive = false;
     state.realtimeResponseRequested = false;
     state.interviewerDraft = "";
-    resumeMicrophoneAfterResponse();
+    setListeningState("response-delayed", "Response delayed", "The interviewer could not complete the response. Try again.");
+    resumeMicrophoneAfterResponse(5000);
     if (responseMeta?.fallbackText && !state.openingResponsePending) {
       deliverRealtimeResponseFallback(responseMeta.fallbackText, message || "The live interviewer could not finish the answer.");
       flushQueuedRealtimeResponse();
@@ -2068,6 +2155,15 @@ function shouldInterviewerRespondTo(text) {
 }
 
 function routeCandidateTurn(text, options = {}) {
+  if (isLikelySimulatorFeedback(text)) {
+    const challenge = scenarios[state.scenarioIndex].prompt;
+    const mismatchResponse = `I may have lost the thread. Are you giving feedback about this simulator, or continuing the challenge: “${challenge}”?`;
+    const instruction = `The candidate appears to be discussing the simulator interface rather than solving the assigned challenge. Do not treat their words as challenge reasoning. Say exactly: ${JSON.stringify(mismatchResponse)}`;
+    if (options.local) respond(mismatchResponse, false, { force: true, localVoice: true });
+    else if (!requestRealtimeResponse(instruction, { force: true, fallbackText: mismatchResponse })) respond(mismatchResponse, false, { force: true, localVoice: true });
+    return;
+  }
+
   if (isRepeatRequest(text)) {
     const previousAnswer = lastInterviewerTurnText();
     if (!previousAnswer) {
@@ -2146,6 +2242,25 @@ function routeCandidateTurn(text, options = {}) {
 
   if (options.local) setSilent();
   else setInterviewerState("Listening");
+}
+
+function isLikelySimulatorFeedback(text = "") {
+  const normalized = String(text).toLowerCase();
+  const strongSignals = [
+    "whiteboard simulator",
+    "this simulator",
+    "this app",
+    "ai pulse",
+    "mic state",
+    "microphone icon",
+    "mute button",
+    "interface feedback",
+    "as we talked about before"
+  ];
+  const signalCount = strongSignals.filter((signal) => normalized.includes(signal)).length;
+  const productFeedbackLanguage = /\b(replace|change|remove|redesign|button|icon|ui|interface)\b/.test(normalized);
+  const sessionMechanics = /\b(mic|microphone|mute|listening|thinking|rendering|transcribing)\b/.test(normalized);
+  return signalCount >= 1 && (productFeedbackLanguage || sessionMechanics);
 }
 
 function registerAnsweredQuestion(text) {
@@ -2623,12 +2738,14 @@ function requestRealtimeResponse(instructions, options = {}) {
     }
   });
   if (!sent) {
+    setListeningState("response-delayed", "Response delayed", "The interviewer could not start a response. Try again.");
     state.realtimeResponseRequested = false;
     state.realtimeResponseActive = false;
     state.realtimeResponseMeta = null;
     resumeMicrophoneAfterResponse();
     return false;
   }
+  setListeningState("thinking", "Thinking", "The interviewer is preparing a response.");
   state.modelCallCount += 1;
   armRealtimeResponseWatchdog(state.realtimeResponseMeta);
   renderCallCounter();
@@ -2648,6 +2765,7 @@ function armRealtimeResponseWatchdog(meta) {
     state.interviewerDraft = "";
     const draft = els.interviewerLog.querySelector("[data-draft='true']");
     if (draft) draft.remove();
+    setListeningState("response-delayed", "Response delayed", "The interviewer took too long to answer. Try again.");
     if (meta.fallbackText) {
       deliverRealtimeResponseFallback(meta.fallbackText, "The live interviewer took too long to answer.");
     } else if (state.openingResponsePending) {
@@ -2658,7 +2776,7 @@ function armRealtimeResponseWatchdog(meta) {
       logMessage("system", failure);
       announce(failure);
     }
-    resumeMicrophoneAfterResponse();
+    resumeMicrophoneAfterResponse(5000);
     flushQueuedRealtimeResponse();
   }, 30000);
 }
@@ -2716,7 +2834,7 @@ function setMicrophoneCapture(enabled) {
   });
 }
 
-function resumeMicrophoneAfterResponse() {
+function resumeMicrophoneAfterResponse(minimumDelay = 0) {
   clearTimeout(microphoneResumeTimer);
   const remainingPlaybackGuard = Math.max(0, state.interviewerPlaybackGuardUntil - Date.now());
   microphoneResumeTimer = window.setTimeout(() => {
@@ -2725,7 +2843,7 @@ function resumeMicrophoneAfterResponse() {
       setMicrophoneCapture(true);
       setListeningState("listening", "Interviewer listening", "Think out loud, or press Ask interviewer for a direct response.");
     }
-  }, Math.max(900, remainingPlaybackGuard));
+  }, Math.max(900, remainingPlaybackGuard, minimumDelay));
 }
 
 function rememberInterviewerPlayback(text) {
@@ -2769,6 +2887,8 @@ function attachRemoteAudio(stream) {
   const audio = document.createElement("audio");
   audio.autoplay = true;
   audio.playsInline = true;
+  audio.defaultPlaybackRate = 1;
+  audio.playbackRate = 1;
   audio.muted = state.interviewerMuted;
   audio.srcObject = stream;
   document.body.appendChild(audio);
@@ -2854,6 +2974,7 @@ Rules of engagement:
 - The highest-value uncovered section is currently: ${currentFrameworkStep().label}. Stay with the candidate's reasoning, then use this as the next nudge only when it is genuinely missing.
 - At a transition, say the next section name once in natural language and ask one opening question. Do not recite the full framework and do not repeatedly call this an "interview scenario."
 - Converge instead of expanding the story. Each turn should narrow the user, outcome, priority, or solution decision for the same challenge.
+- If the candidate starts discussing a different problem, another product, or feedback about this simulator, do not absorb it into the assigned challenge. Say that the context appears mismatched and ask whether they want to return to the assigned challenge.
 - Once the primary user, goal, platform, success definition, or core problem has been established, never replace it, rename it, or introduce a competing version later.
 - The canonical identity locks above are stronger than generic examples in these instructions. Examples must never introduce a different audience or product context.
 - When a candidate repeats a factual question, give the same established answer in shorter language. Do not generate a new stakeholder, domain, product, goal, metric, or backstory.
@@ -3001,37 +3122,8 @@ function dismissAskExplainer() {
 }
 
 function maybeShowProcessNudge() {
-  if (!state.started || state.ended || state.activeNudge || !els.voiceError?.hidden) return;
-  const candidateText = state.transcript.filter((turn) => turn.role === "candidate").map((turn) => turn.text).join(" ").toLowerCase();
-  const boardLabels = state.boardElements.filter((element) => element.text).length;
-  const nudges = [
-    {
-      key: "framing",
-      after: 4 * 60 * 1000,
-      missing: !/\b(problem|goal|scope|success|user need|trying to)\b/.test(candidateText),
-      text: "Process check: briefly state the problem, primary user, scope, and success signal before going deeper."
-    },
-    {
-      key: "annotations",
-      after: 6 * 60 * 1000,
-      missing: state.boardElements.length > 0 && boardLabels === 0,
-      text: "Your board has structure but no labels yet. Add short annotations so the reasoning and flow remain legible."
-    },
-    {
-      key: "user",
-      after: 8 * 60 * 1000,
-      missing: !/\b(user|customer|person|people|audience|persona|technician|admin|traveler)\b/.test(candidateText),
-      text: "User check: name the primary user and the need or context driving your decisions."
-    }
-  ];
-  const nudge = nudges.find((item) => state.elapsed >= item.after && item.missing && !state.shownNudges.has(item.key));
-  if (!nudge) return;
-  state.shownNudges.add(nudge.key);
-  state.activeNudge = nudge.key;
-  els.processNudgeText.textContent = nudge.text;
-  els.processNudge.hidden = false;
-  window.clearTimeout(infoToastTimer);
-  infoToastTimer = window.setTimeout(dismissProcessNudge, 6000);
+  // Unsolicited coaching banners are intentionally disabled so the candidate
+  // can stay focused on the whiteboard and interviewer.
 }
 
 function dismissProcessNudge() {
@@ -3044,15 +3136,23 @@ function dismissProcessNudge() {
 function setListeningState(kind, title, detail) {
   document.body.dataset.listening = kind;
   const compactVoiceLabels = {
-    idle: "Mic",
-    requesting: "Connecting",
-    listening: "Mic on",
-    receiving: "Mic on",
-    "no-speech": "Mic on",
-    fallback: "Retry mic",
+    idle: "AI ready",
+    requesting: "Connecting…",
+    listening: "Listening…",
+    receiving: "Listening…",
+    heard: "Heard you",
+    paused: "Listening paused",
+    thinking: "Thinking…",
+    responding: "Responding…",
+    "no-speech": "I didn’t catch that",
+    "response-delayed": "Response delayed — try again",
+    fallback: "Try again",
     ended: "Mic off"
   };
-  els.voiceStatus.textContent = compactVoiceLabels[kind] || "Mic";
+  const voiceLabel = compactVoiceLabels[kind] || "AI ready";
+  els.voiceStatus.textContent = voiceLabel;
+  els.voiceToggle.dataset.voiceState = kind;
+  els.voiceToggle.setAttribute("aria-label", `AI status: ${voiceLabel}. Click to pause or resume listening.`);
   els.listeningTitle.textContent = title;
   els.micHelp.textContent = detail;
   if (!currentTranscriptText()) {
@@ -3448,7 +3548,7 @@ function speakInterviewerText(text) {
   if (state.interviewerMuted) return;
   rememberInterviewerPlayback(text);
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.92;
+  utterance.rate = 1;
   utterance.pitch = 1;
   utterance.volume = 1;
   utterance.onend = updateInterviewerState;
@@ -3502,11 +3602,13 @@ function toggleInterviewerMute() {
 }
 
 function renderInterviewerMute() {
-  const action = state.interviewerMuted ? "Unmute interviewer audio" : "Mute interviewer audio";
+  const action = state.interviewerMuted ? "Turn AI voice on" : "Mute AI voice";
   els.interviewerState.classList.toggle("is-muted", state.interviewerMuted);
   els.interviewerState.setAttribute("aria-pressed", String(state.interviewerMuted));
   els.interviewerState.setAttribute("aria-label", action);
-  els.interviewerState.title = `${action} · ${state.interviewerActivity}`;
+  els.interviewerState.title = `${action} · This controls AI audio, not your microphone`;
+  const iconUse = els.interviewerState.querySelector("use");
+  if (iconUse) iconUse.setAttribute("href", state.interviewerMuted ? "./lucide-sprite.svg#volume-x" : "./lucide-sprite.svg#volume-2");
   const accessibleLabel = els.interviewerState.querySelector(".sr-only");
   if (accessibleLabel) accessibleLabel.textContent = action;
 }
@@ -3747,7 +3849,12 @@ async function submitSessionFeedback(event) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || "Feedback could not be sent.");
     els.feedbackForm.querySelectorAll("input, textarea, button").forEach((control) => { control.disabled = true; });
-    els.feedbackStatus.textContent = "Thank you—your feedback was sent.";
+    els.feedbackStatus.textContent = "";
+    els.feedbackForm.hidden = true;
+    if (els.feedbackThanks) {
+      els.feedbackThanks.hidden = false;
+      els.feedbackThanks.focus();
+    }
   } catch (error) {
     els.submitFeedback.disabled = false;
     els.feedbackStatus.textContent = error.message || "Feedback could not be sent. Please try again.";
