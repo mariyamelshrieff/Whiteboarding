@@ -4,6 +4,12 @@ A voice-first product design whiteboarding simulator for practicing high-stakes 
 
 The MVP is tuned for product design, UX, and interaction design whiteboard challenges, with company-aware practice calibration for Google, Meta, Apple, and Netflix.
 
+## Demo
+
+[![Watch the Whiteboarding Interview Simulator demo](docs/media/whiteboard-simulator-demo.png)](docs/media/whiteboard-simulator-demo.mp4)
+
+_Select the preview to watch the full simulator walkthrough._
+
 ## What It Does
 
 - Runs a 30-minute whiteboard interview simulation, with a 20-minute express option.
